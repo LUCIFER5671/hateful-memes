@@ -21,3 +21,21 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 **Results:** train 8,500 (35.5% hateful), dev 500 (49.4%), test 1,000 (49.0%); columns id/img/label/text; 0 missing images; all 10,000 images fully decode (9,995 RGB, 5 RGBA); sizes 94–825 px; data/ = 3.61 GB.
 
 **How I checked it:** _(fill in)_
+
+---
+
+## 2026-11-07 — Step 2: Git setup + Part 0 scaffolding (label distribution, examples, blind "be the model")
+
+**Mode:** Creation (code, notebook, templates).
+
+**What I asked:** git init + first commit + private GitHub repo via `gh` (or the commands if gh isn't available); create `notebooks/lab3.ipynb` (short cells, logic in `src/`); Part 0.1 label-distribution plot (`src/plots.py`, `figures/label_distribution.png`); Part 0.2 `show_meme` helper + a 12-meme training grid (6/6, fixed seed) + an empty-headings `notes/part0_notes.md`; Part 0.3 pick 20 dev memes blind (ids to `results/human_eval_ids.csv`, an empty `results/human_labels.csv`, a labeling cell without labels, a scoring cell using a new `src/metrics.compute_metrics`); an empty `notes/work_log.md` template; execute the notebook; don't describe meme content.
+
+**What Claude did:**
+- `git init -b main`; confirmed via `git check-ignore` that .venv/, data/, embeddings/, __pycache__/ and .ipynb_checkpoints/ are ignored; first commit; confirmed 0 tracked files under data/ or embeddings/. **gh CLI is not installed**, so the GitHub repo was not created; Claude gave me the commands to run myself.
+- Added `show_meme`, `show_memes` (grid) and `sample_balanced` to `src/data.py`; `src/plots.py` (`plot_label_distribution`); `src/metrics.py` (`compute_metrics`); `src/human_eval.py` (`prepare()` picks 20 dev ids with a plain random sample, seed 510, and writes the id list + an empty sheet without overwriting an existing one; `score()` prints "fill in … first" if any guess is missing, else joins the true labels and returns metrics + the wrong memes).
+- Built `notebooks/lab3.ipynb` (Setup, 0.1, 0.2, 0.3 labeling + scoring cells) and executed it. All cells ran; the scoring cell printed the expected "fill in results/human_labels.csv first".
+- Fixes during the step: (1) the first version of the label plot had the "% hateful" labels overlapping the bars for dev/test (dev is 17x smaller than train on a shared y-axis), so it was redrawn as one panel per split with its own y-scale; (2) the executed notebook was 7.3 MB because the meme grids were embedded as PNG, so inline figures were switched to JPEG (now ~1.2 MB).
+- Smoke-tested `score()` on a throw-away copy of the sheet filled with random guesses (in a temp folder; nothing about labels printed) and `compute_metrics` on a toy example.
+- Claude did not view or describe any meme images or texts.
+
+**How I checked it:** _(fill in)_

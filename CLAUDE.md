@@ -33,7 +33,12 @@ Binary classification (1 = hateful, 0 = not hateful) of memes, using **frozen** 
 - `data/hateful_memes/` — dataset (jsonl + `img/`), git-ignored. Download with `python -m src.download` (resumable).
 - `embeddings/` — cached embedding tensors (`.pt`), git-ignored.
 - `src/` — reusable code. `src/data.py`: `load_split(name)` → DataFrame with absolute `path` column; `python -m src.data` re-runs dataset checks.
-- `notebooks/`, `figures/`, `results/`.
+- `src/plots.py` (figures), `src/metrics.py` (`compute_metrics(y_true, y_pred, y_prob=None)` → accuracy/precision/recall/F1[/AUROC], zero_division=0 — use for every model), `src/human_eval.py` (Part 0.3 blind labeling; never overwrites `results/human_labels.csv`).
+- `notebooks/lab3.ipynb` — the single submitted notebook (kernel "Python (hateful-memes)"); later steps append sections. Keep cells short (imports, calls, plots); logic goes in `src/`. Inline figures are JPEG to keep it small. Execute with `jupyter nbconvert --to notebook --execute --inplace notebooks/lab3.ipynb`.
+- `notes/` — the user's own writing (`part0_notes.md`, `work_log.md`). Do NOT fill these in.
+- `figures/`, `results/` (`human_eval_ids.csv`, `human_labels.csv` filled in by the user).
+- Git: local repo on `main`; private GitHub remote `hateful-memes` (never public). `embeddings/` is git-ignored, so code must `mkdir` it.
+- Part 0.3 blindness: never reveal labels of the 20 ids in `results/human_eval_ids.csv` in chat, filenames, or the labeling cell until the user has filled in `human_labels.csv`.
 - `ai_log.md` — after every step, append: date, step, what the user asked, what Claude did. Needed for the required Generative AI Use Statement (PDF §11).
 
 ## Environment

@@ -29,6 +29,52 @@ def load_split(name: str) -> pd.DataFrame:
     return df
 
 
+LABEL_NAMES = {0: "not hateful", 1: "hateful"}
+
+
+def show_meme(row, show_label: bool = True, ax=None, wrap: int = 45):
+    """Show one meme (image + id + text, plus the label if show_label). `row` is a load_split() row."""
+    import textwrap
+
+    import matplotlib.pyplot as plt
+    from PIL import Image
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(4, 4.6))
+    with Image.open(row["path"]) as im:
+        ax.imshow(im.convert("RGB"))
+    ax.set_xticks([]), ax.set_yticks([])
+    title = f"id {row['id']}"
+    if show_label:
+        title += f"  |  {LABEL_NAMES[int(row['label'])]}"
+    ax.set_title(title, fontsize=10, fontweight="bold",
+                 color=("crimson" if show_label and int(row["label"]) == 1 else "black"))
+    ax.set_xlabel(textwrap.fill(str(row["text"]), wrap), fontsize=8)
+    return ax
+
+
+def show_memes(df: pd.DataFrame, show_label: bool = True, ncols: int = 4, save_path=None):
+    """Grid of memes, in the order of df's rows."""
+    import matplotlib.pyplot as plt
+
+    nrows = -(-len(df) // ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4.8 * nrows), squeeze=False)
+    for ax in axes.flat[len(df):]:
+        ax.axis("off")
+    for ax, (_, row) in zip(axes.flat, df.iterrows()):
+        show_meme(row, show_label=show_label, ax=ax)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, dpi=110, bbox_inches="tight")
+    return fig
+
+
+def sample_balanced(df: pd.DataFrame, n_per_class: int, seed: int) -> pd.DataFrame:
+    """n_per_class rows from each label, shuffled together (fixed seed)."""
+    parts = [df[df.label == c].sample(n_per_class, random_state=seed) for c in (0, 1)]
+    return pd.concat(parts).sample(frac=1, random_state=seed).reset_index(drop=True)
+
+
 def _dir_size(p: Path) -> int:
     return sum(f.stat().st_size for f in p.rglob("*") if f.is_file())
 
