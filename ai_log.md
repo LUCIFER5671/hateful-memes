@@ -106,3 +106,15 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Observations Claude flagged: every grid run had its lowest dev loss at epoch 1 or 2 (38 at epoch 1, 10 at epoch 2), and dev loss then rises steadily (seed 0: 0.72 at epoch 2 → ~1.36 at epoch 50) while train loss falls to ~0.2, which is fast overfitting. The best dev loss in the whole grid (0.696) is no better than predicting 0.5 for everything (ln 2 = 0.693). The top 5 configs differ by only 0.002 AUROC, much less than the seed-to-seed std (0.013), so the choice among them is essentially noise. pos_weight helped on average (mean grid AUROC 0.622 vs 0.612).
 
 **How I checked it:** I checked whether the loss curves behaved as expected (initial loss, tiny overfit, dev-loss minimum) and asked Claude to verify. The check showed best_epoch was always epoch 1–2 and that the untrained model often had a lower dev loss than any trained epoch, even though dev AUROC rose from ~0.5 to 0.62. I concluded that dev-loss early stopping conflicted with selecting by AUROC and changed it to stop on dev AUROC, with slower learning rates and up to 100 epochs. Confirmed with git grep that the training code never loads the test split.
+
+---
+
+## 2026-11-12 — Report: Section 1 (Looking at the Data) + Figure 1
+
+**Mode:** Creation (file setup) + Advice/feedback (number check).
+
+**What I asked:** Put my Section 1 text into the report with `figures/label_distribution.png` as Figure 1, and record in the AI-use table (Report writing) that I had Claude polish this section from my own notes, checked by verifying every number against `results/human_labels.csv` and the notebook output.
+
+**What Claude did:** Created `report/report.md` with the report structure from the lab PDF (§10–11). Inserted my Section 1 text word for word with Figure 1 and a caption; left all other sections empty for me. Filled the "Report writing" row of the AI-use table as I worded it. Before inserting, Claude re-computed every number in the section (split sizes and % hateful, my 13/20 and precision/recall/F1, the 9/5/6 modality counts and 4/9, 4/5, 5/6 accuracies, the 5 false alarms and the two missed ids, 6/20 hateful in my sample); all matched. Note: the text arrived already polished; I polished it with Claude (in a separate chat) and Grammarly, not in this Claude Code session.
+
+**How I checked it:** Verified every number against `results/human_labels.csv` and the notebook output.
