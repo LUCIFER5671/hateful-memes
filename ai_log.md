@@ -140,4 +140,4 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Dev, 3 seeds: accuracy 0.574 ± 0.012, precision 0.602 ± 0.016, recall 0.408 ± 0.035, F1 0.485 ± 0.027, AUROC 0.627 ± 0.007 (previous dev-loss-stopping version: AUROC 0.621 ± 0.013).
 - Grid: dev AUROC 0.620–0.635 across all 96 configs; top 5 within 0.003 (less than the seed std). Mean AUROC by lr: 1e-3 0.629, 3e-4 0.626, 1e-4 0.626, 3e-5 0.625. Mean best epoch by lr: 2.0 / 2.7 / 6.2 / 19.0. In 68 of 96 runs the untrained model (epoch 0) has the lowest dev loss.
 
-**How I checked it:** _(fill in)_
+**How I checked it:** Checked that the sanity checks still passed after the change (initial loss 0.659, overfit 100%). Confirmed best_epoch was 2 for all three seeds from the per-seed table in the notebook, and saw on the seed-0 two-panel figure that AUROC also declines after its peak. The note's first claim contradicted this, so I had it rewritten. Noticed the retrain didn't reproduce the grid's 0.6348, and traced it to pos_weight being rounded in the CSV.
