@@ -18,9 +18,10 @@ RESULTS = ROOT / "results"
 DEV_RESULTS_CSV = RESULTS / "dev_results.csv"
 METRICS = ["accuracy", "precision", "recall", "f1", "auroc"]
 
-GRID = dict(hidden_dim=[64, 256, 512], lr=[1e-3, 3e-4], dropout=[0.0, 0.3],
+GRID = dict(hidden_dim=[64, 256, 512], lr=[1e-3, 3e-4, 1e-4, 3e-5], dropout=[0.0, 0.3],
             weight_decay=[0.0, 1e-4], pos_weight=[None, "balanced"])
-MAX_EPOCHS = 50
+MAX_EPOCHS = 100
+EARLY_STOP = "auroc"  # keep the epoch with the highest dev AUROC (same metric as model selection)
 SEEDS = (0, 1, 2)
 
 
@@ -41,7 +42,8 @@ def sanity_checks(Xtr, ytr, ydev, hidden_dim=256, save_path=None, tiny_n=20, tin
     gen = torch.Generator().manual_seed(0)
     idx = torch.randperm(len(Xtr), generator=gen)[:tiny_n]
     Xs, ys = Xtr[idx], ytr[idx]
-    res = train_classifier(Xs, ys, Xs, ys, hidden_dim=hidden_dim, lr=1e-3, epochs=tiny_epochs, seed=0)
+    res = train_classifier(Xs, ys, Xs, ys, hidden_dim=hidden_dim, lr=1e-3, epochs=tiny_epochs, seed=0,
+                           early_stop_metric="last")  # report the final epoch
     p = predict_proba(res.model, Xs)
     out = {
         "a_dumb_baseline_dev": baseline,
@@ -63,22 +65,31 @@ def _configs(grid: dict):
         yield dict(zip(keys, vals))
 
 
-def run_grid(name, Xtr, ytr, Xdev, ydev, grid=GRID, epochs=MAX_EPOCHS, seed=0, force=False, verbose=True):
-    """Train every config (seed 0), record dev metrics at each run's best (lowest dev loss) epoch.
-    Cached to results/grid_<name>.csv; returns it sorted by dev AUROC (ties: lower dev loss)."""
+def run_grid(name, Xtr, ytr, Xdev, ydev, grid=GRID, epochs=MAX_EPOCHS, seed=0, early_stop_metric=EARLY_STOP,
+             force=False, verbose=True):
+    """Train every config (seed 0), record dev metrics at each run's selected epoch (early_stop_metric).
+    Cached to results/grid_<name>.csv; returns it sorted by dev AUROC (ties: lower dev loss).
+    A cached grid made with different settings raises instead of being silently reused."""
     path = RESULTS / f"grid_{name}.csv"
+    configs = list(_configs(grid))
     if path.exists() and not force:
-        return pd.read_csv(path)
+        df = pd.read_csv(path)
+        same = (len(df) == len(configs) and "early_stop_metric" in df and "max_epochs" in df
+                and (df["early_stop_metric"] == early_stop_metric).all() and (df["max_epochs"] == epochs).all())
+        if not same:
+            raise RuntimeError(f"{path} was made with different grid settings; rerun with force=True")
+        return df
     pw_bal = balanced_pos_weight(ytr)
     rows = []
-    configs = list(_configs(grid))
     t0 = time.perf_counter()
     for i, cfg in enumerate(configs, 1):
         pw = pw_bal if cfg["pos_weight"] == "balanced" else None
         t = time.perf_counter()
-        res = train_classifier(Xtr, ytr, Xdev, ydev, epochs=epochs, seed=seed,
+        res = train_classifier(Xtr, ytr, Xdev, ydev, epochs=epochs, seed=seed, early_stop_metric=early_stop_metric,
                                **{k: v for k, v in cfg.items() if k != "pos_weight"}, pos_weight=pw)
-        rows.append({**cfg, "pos_weight": "none" if pw is None else f"{pw:.4f}", "best_epoch": res.best_epoch,
+        rows.append({**cfg, "pos_weight": "none" if pw is None else f"{pw:.4f}",
+                     "early_stop_metric": early_stop_metric, "max_epochs": epochs, "best_epoch": res.best_epoch,
+                     "min_dev_loss_epoch": int(np.argmin(res.curves["dev_loss"])),
                      **{f"dev_{k}": v for k, v in res.dev_metrics.items()}, "seconds": time.perf_counter() - t})
         if verbose:
             print(f"[{i:2d}/{len(configs)}] {cfg}  best_epoch={res.best_epoch:2d}  "
@@ -98,9 +109,10 @@ def config_from_row(row) -> dict:
                 weight_decay=float(row["weight_decay"]), pos_weight=None if pw == "none" else float(pw))
 
 
-def run_seeds(Xtr, ytr, Xdev, ydev, config: dict, epochs=MAX_EPOCHS, seeds=SEEDS):
+def run_seeds(Xtr, ytr, Xdev, ydev, config: dict, epochs=MAX_EPOCHS, seeds=SEEDS, early_stop_metric=EARLY_STOP):
     """Retrain one config with several seeds. Returns the list of TrainResults (seed order)."""
-    return [train_classifier(Xtr, ytr, Xdev, ydev, epochs=epochs, seed=s, **config) for s in seeds]
+    return [train_classifier(Xtr, ytr, Xdev, ydev, epochs=epochs, seed=s, early_stop_metric=early_stop_metric,
+                             **config) for s in seeds]
 
 
 # ---------------------------------------------------------------- dev results table

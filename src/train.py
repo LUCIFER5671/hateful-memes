@@ -11,6 +11,7 @@ from typing import NamedTuple
 
 import numpy as np
 import torch
+from sklearn.metrics import roc_auc_score
 from torch import nn
 
 from src.metrics import compute_metrics
@@ -21,11 +22,15 @@ MODEL_DIR = ROOT / "results" / "models"
 
 
 class TrainResult(NamedTuple):
-    model: StandardizedClassifier  # best-dev-loss weights, on CPU, eval mode
-    curves: dict                   # per epoch: train_loss, dev_loss (both eval mode, unweighted), train_objective
-    best_epoch: int                # 1-based epoch with the lowest dev loss
-    dev_metrics: dict              # compute_metrics at best_epoch (threshold 0.5 on sigmoid, + AUROC)
+    model: StandardizedClassifier  # weights from best_epoch, on CPU, eval mode
+    curves: dict                   # index = epoch (0 = untrained): train_loss, dev_loss (eval mode, unweighted),
+                                   # dev_auroc, train_objective (NaN at epoch 0)
+    best_epoch: int                # selected epoch (0 = untrained model) per early_stop_metric
+    dev_metrics: dict              # compute_metrics at best_epoch (threshold 0.5 on sigmoid, + AUROC) + dev_loss
     config: dict
+
+
+EARLY_STOP_METRICS = ("auroc", "loss", "last")
 
 
 def set_seed(seed: int) -> None:
@@ -66,18 +71,23 @@ def initial_loss(Xtr, ytr, hidden_dim: int, batch_size: int = 64, seed: int = 0)
 
 
 def train_classifier(Xtr, ytr, Xdev, ydev, hidden_dim, lr, epochs, batch_size=64, dropout=0.0,
-                     weight_decay=0.0, pos_weight=None, seed=0) -> TrainResult:
+                     weight_decay=0.0, pos_weight=None, seed=0, early_stop_metric="auroc") -> TrainResult:
     """Train a StandardizedClassifier with BCEWithLogitsLoss + Adam on shuffled mini-batches.
 
     - Standardization stats come from Xtr only and are stored inside the model.
     - pos_weight (if given) only affects the training objective; the recorded train/dev losses are
       always the plain (unweighted) BCE in eval mode, so curves are comparable across configs.
-    - Returns the weights from the epoch with the lowest dev loss.
+    - Curves include epoch 0 (the untrained model).
+    - early_stop_metric selects which epoch's weights are returned:
+        "auroc" (default): highest dev AUROC;  "loss": lowest dev loss;  "last": final epoch
+      (ties -> earliest epoch). "last" is for the tiny-batch overfit sanity check.
     """
+    if early_stop_metric not in EARLY_STOP_METRICS:
+        raise ValueError(f"early_stop_metric must be one of {EARLY_STOP_METRICS}")
     config = dict(hidden_dim=int(hidden_dim), lr=float(lr), epochs=int(epochs), batch_size=int(batch_size),
                   dropout=float(dropout), weight_decay=float(weight_decay),
                   pos_weight=None if pos_weight is None else float(pos_weight), seed=int(seed),
-                  input_dim=int(Xtr.shape[1]))
+                  early_stop_metric=early_stop_metric, input_dim=int(Xtr.shape[1]))
     set_seed(seed)
     dev = device()
     Xtr, Xdev = Xtr.float().to(dev), Xdev.float().to(dev)
@@ -91,36 +101,48 @@ def train_classifier(Xtr, ytr, Xdev, ydev, hidden_dim, lr, epochs, batch_size=64
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     gen = torch.Generator().manual_seed(seed)
 
-    curves = {"train_loss": [], "dev_loss": [], "train_objective": []}
-    best = (float("inf"), 0, None)
+    ydev_np = ydev.cpu().numpy().astype(int)
+    curves = {"train_loss": [], "dev_loss": [], "dev_auroc": [], "train_objective": []}
+    best = (None, 0, None)  # (score where higher is better, epoch, state_dict)
+
+    def evaluate(epoch, objective_value):
+        nonlocal best
+        model.eval()
+        with torch.no_grad():
+            tr_loss = plain(model(Xtr), ytr_c).item()
+            dev_logits = model(Xdev)
+            dev_loss = plain(dev_logits, ydev_c).item()
+        dev_auc = roc_auc_score(ydev_np, dev_logits.squeeze(1).cpu().numpy())
+        curves["train_loss"].append(tr_loss)
+        curves["dev_loss"].append(dev_loss)
+        curves["dev_auroc"].append(dev_auc)
+        curves["train_objective"].append(objective_value)
+        score = {"auroc": dev_auc, "loss": -dev_loss, "last": epoch}[early_stop_metric]
+        if best[0] is None or score > best[0]:
+            best = (score, epoch, copy.deepcopy(model.state_dict()))
+
+    evaluate(0, float("nan"))  # the untrained model
     n = len(Xtr)
     for epoch in range(1, epochs + 1):
         model.train()
         perm = torch.randperm(n, generator=gen).to(dev)
-        total = 0.0
+        total = torch.zeros((), device=dev)
         for i in range(0, n, batch_size):
             idx = perm[i:i + batch_size]
             optimizer.zero_grad()
             loss = objective(model(Xtr[idx]), ytr_c[idx])
             loss.backward()
             optimizer.step()
-            total += loss.item() * len(idx)
-        model.eval()
-        with torch.no_grad():
-            tr_loss = plain(model(Xtr), ytr_c).item()
-            dev_loss = plain(model(Xdev), ydev_c).item()
-        curves["train_loss"].append(tr_loss)
-        curves["dev_loss"].append(dev_loss)
-        curves["train_objective"].append(total / n)
-        if dev_loss < best[0]:
-            best = (dev_loss, epoch, copy.deepcopy(model.state_dict()))
+            total += loss.detach() * len(idx)
+        evaluate(epoch, (total / n).item())
 
+    best_epoch = best[1]
     model.load_state_dict(best[2])
     model = model.cpu().eval()
     probs = predict_proba(model, Xdev.cpu())
-    metrics = compute_metrics(ydev.cpu().numpy(), (probs >= 0.5).int().numpy(), probs.numpy())
-    metrics["dev_loss"] = best[0]
-    return TrainResult(model, curves, best[1], metrics, config)
+    metrics = compute_metrics(ydev_np, (probs >= 0.5).int().numpy(), probs.numpy())
+    metrics["dev_loss"] = curves["dev_loss"][best_epoch]
+    return TrainResult(model, curves, best_epoch, metrics, config)
 
 
 def save_model(result: TrainResult, name: str) -> Path:
