@@ -20,7 +20,7 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 
 **Results:** train 8,500 (35.5% hateful), dev 500 (49.4%), test 1,000 (49.0%); columns id/img/label/text; 0 missing images; all 10,000 images fully decode (9,995 RGB, 5 RGBA); sizes 94–825 px; data/ = 3.61 GB.
 
-**How I checked it:** _(fill in)_
+**How I checked it:** Confirmed the ResNet-18 weights version (ResNet18_Weights.DEFAULT) by checking it manually. Verified all 10,000 images exist using a terminal command (no missing files). Cross-checked the installed dependencies manually in the terminal.
 
 ---
 
@@ -38,7 +38,7 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Smoke-tested `score()` on a throw-away copy of the sheet filled with random guesses (in a temp folder; nothing about labels printed) and `compute_metrics` on a toy example.
 - Claude did not view or describe any meme images or texts.
 
-**How I checked it:** _(fill in)_
+**How I checked it:** Checked that the blind grid in 0.3 showed no labels before I labeled. Compared the label-distribution plot against the split percentages (35.5 / 49.4 / 49.0%). Confirmed the scoring cell refused to run until human_labels.csv was filled, and that the 20 rows matched the order of the printed sheet.
 
 ---
 
@@ -105,4 +105,4 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Dev, 3 seeds: accuracy 0.575 ± 0.015, precision 0.595 ± 0.038, recall 0.453 ± 0.059, F1 0.512 ± 0.028, AUROC 0.621 ± 0.013.
 - Observations Claude flagged: every grid run had its lowest dev loss at epoch 1 or 2 (38 at epoch 1, 10 at epoch 2), and dev loss then rises steadily (seed 0: 0.72 at epoch 2 → ~1.36 at epoch 50) while train loss falls to ~0.2, which is fast overfitting. The best dev loss in the whole grid (0.696) is no better than predicting 0.5 for everything (ln 2 = 0.693). The top 5 configs differ by only 0.002 AUROC, much less than the seed-to-seed std (0.013), so the choice among them is essentially noise. pos_weight helped on average (mean grid AUROC 0.622 vs 0.612).
 
-**How I checked it:** _(fill in)_
+**How I checked it:** Verified the initial loss was ~0.69 (ln 2) and the 20-example overfit reached 100% train accuracy. Checking the loss curves for all 3 seeds, I found best_epoch was always epoch 1–2 and the untrained model often had a lower dev loss than the best trained epoch, even though dev AUROC rose from ~0.5 to 0.62. I concluded that dev-loss early stopping conflicted with selecting by AUROC, and changed it to stop on dev AUROC. Confirmed with git grep that the training code never loads the test split.
