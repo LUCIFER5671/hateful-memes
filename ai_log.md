@@ -57,7 +57,7 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 
 **Results:** full-run time 317 s on the RTX 5060 (BERT 48 s, ResNet-18 110 s, CLIP 144 s for all splits); shapes train 8500 / dev 500 / test 1000 × (768 BERT, 512 ResNet, 512 CLIP image, 512 CLIP text); `embeddings/` = 94 MB (30 files incl. the 200-subsets), git-ignored.
 
-**How I checked it:** _(fill in)_
+**How I checked it:** Checked shapes 8500/500/1000 × 768/512; noted the QuickGELU fix and asked why it mattered.
 
 ---
 
@@ -73,7 +73,7 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 
 **Results:** accuracy 0.65 (13/20), precision 0.444, recall 0.667, F1 0.533. Wrong (my guess → true label): 89425 (0→1, both), 73021 (1→0, both), 37160 (1→0, both), 61085 (1→0, image), 23810 (0→1, text), 41728 (1→0, both), 37420 (1→0, both). Accuracy by modality: both 4/9 (0.44), image 4/5 (0.80), text 5/6 (0.83). The 20-meme sample has 6 hateful (30%) vs 49% in the full dev set.
 
-**How I checked it:** _(fill in)_
+**How I checked it:** Confirmed my 20 guesses matched the sheet before scoring.
 
 ---
 
