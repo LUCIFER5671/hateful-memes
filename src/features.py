@@ -6,12 +6,35 @@ from src.embed import DIMS, emb_path, meta_path, subset
 
 ENCODER_NAMES = list(DIMS)  # text_bert, image_resnet, clip_image, clip_text
 
+# The test set is evaluated exactly once, at the very end. Until then it stays locked:
+# load_features("test", ...) raises. The final step calls unlock_test() explicitly.
+TEST_LOCKED = True
+
+
+def unlock_test() -> None:
+    """Only for the final, one-time test evaluation (after every decision has been made on dev)."""
+    global TEST_LOCKED
+    TEST_LOCKED = False
+
+
+def feature_shapes(tag: str = "all") -> pd.DataFrame:
+    """Shapes of all cached embedding files (no labels loaded; safe for the locked test split)."""
+    rows = []
+    for split in ["train", "dev", "test"]:
+        for enc in ENCODER_NAMES:
+            X = torch.load(emb_path(split, enc, tag), map_location="cpu")
+            rows.append({"split": split, "encoder": enc, "shape": tuple(X.shape)})
+    return pd.DataFrame(rows)
+
 
 def load_features(split: str, encoder: str, tag: str = "all"):
     """Return (X float32 [n, d], y float32 [n], meta DataFrame[id, text, label]) for one split/encoder.
 
     Rows are in the split's jsonl order; checked against the meta file and the jsonl itself.
     """
+    assert split != "test" or not TEST_LOCKED, (
+        "test split is locked: every decision is made on dev and test is evaluated once at the end "
+        "(call src.features.unlock_test() only in the final evaluation step)")
     if encoder not in DIMS:
         raise ValueError(f"unknown encoder {encoder!r}; use one of {ENCODER_NAMES}")
     p = emb_path(split, encoder, tag)

@@ -74,3 +74,35 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 **Results:** accuracy 0.65 (13/20), precision 0.444, recall 0.667, F1 0.533. Wrong (my guess → true label): 89425 (0→1, both), 73021 (1→0, both), 37160 (1→0, both), 61085 (1→0, image), 23810 (0→1, text), 41728 (1→0, both), 37420 (1→0, both). Accuracy by modality: both 4/9 (0.44), image 4/5 (0.80), text 5/6 (0.83). The 20-meme sample has 6 hateful (30%) vs 49% in the full dev set.
 
 **How I checked it:** _(fill in)_
+
+---
+
+## 2026-11-12 — Notes saved for me (between Steps 3 and 4)
+
+**Mode:** Creation (transcription / drafting).
+- ResNet final-layer answer: written by me; Claude pasted it word for word into the notebook cell.
+- `notes/hypothesis_510.md`: written by me before any fusion results; Claude saved it word for word and committed it on its own (`38e954c`, "510 hypothesis (written before Part 3)").
+- `notes/work_log.md` 2026-11-12 entry: at my request, **Claude drafted this entry** from facts in this session (embedding timings, the CLIP QuickGELU problem and fix, my 65% / 13 of 20 human baseline). Committed as "Work log: embedding timings, CLIP QuickGELU fix, human baseline 65% (13/20)".
+- I also asked Claude a conceptual question ("why does early fusion work better than late fusion?"). Claude explained the usual reasoning (early fusion can learn text-image interactions; late fusion only averages two single-modality opinions), pointed out that we had not run fusion yet so it isn't known for our data, and listed reasons it might not hold. Mode: Information.
+
+---
+
+## 2026-11-12 — Step 4: Shared training function + Part 1 (text-only, BERT) + sanity checks
+
+**Mode:** Creation (code) + Information (Claude's reading of the results).
+
+**What I asked:** `src/models.py` (PDF classifier + optional dropout); `src/train.py` `train_classifier(...)` reused for every model (train-only standardization stored with the model, BCEWithLogitsLoss with optional pos_weight, Adam, shuffled mini-batches, seeds, per-epoch train/dev loss with dev loss always unweighted, keep the lowest-dev-loss epoch, return model/curves/best_epoch/dev metrics) + save/load; text-model sanity checks (dumb baseline, initial loss vs ln 2, overfit 20 examples for 300 epochs) saved to `results/sanity_text.json`; a 48-config grid selected by dev AUROC; retrain the chosen config with seeds 0/1/2; loss-curve plot; `results/dev_results.csv`; a "Part 1" notebook section; never load the test split, with an assert guarding it.
+
+**What Claude did:**
+- Wrote `src/models.py` (`Classifier`, `StandardizedClassifier` holding train mean/std as buffers), `src/train.py`, `src/experiments.py`; added `plot_loss_curves` to `src/plots.py`; added `results/models/` to .gitignore.
+- Test guard: `load_features("test", ...)` now raises an AssertionError until `unlock_test()` is called (final step only); verified it raises. The Step 3 "Embeddings" cell used to load test features for shapes, so it was changed to `feature_shapes()` (shapes only, no labels).
+- Design choices to note: train loss in the curves is computed after each epoch in eval mode, unweighted, on the full train set, so it's directly comparable to dev loss; the per-batch training objective (with dropout and pos_weight) is kept separately as `train_objective`. The grid is cached in `results/grid_text_bert.csv` so re-running the notebook doesn't re-run it. `record_dev_result` replaces a model's row in place so re-runs don't duplicate rows.
+- Ran the grid (48 configs, ~10 min on GPU), the 3-seed retraining and the notebook.
+
+**Results:**
+- Sanity: (a) always "not hateful" on dev: accuracy 0.506, precision/recall/F1 0, AUROC 0.5; (b) initial loss 0.658 vs ln 2 = 0.693; (c) 20 examples × 300 epochs: final train loss 4.9e-5, train accuracy 100%.
+- Chosen config (best dev AUROC 0.6336, seed 0): hidden 256, lr 1e-3, dropout 0.3, weight decay 1e-4, pos_weight 1.8155 (= n_neg/n_pos).
+- Dev, 3 seeds: accuracy 0.575 ± 0.015, precision 0.595 ± 0.038, recall 0.453 ± 0.059, F1 0.512 ± 0.028, AUROC 0.621 ± 0.013.
+- Observations Claude flagged: every grid run had its lowest dev loss at epoch 1 or 2 (38 at epoch 1, 10 at epoch 2), and dev loss then rises steadily (seed 0: 0.72 at epoch 2 → ~1.36 at epoch 50) while train loss falls to ~0.2, which is fast overfitting. The best dev loss in the whole grid (0.696) is no better than predicting 0.5 for everything (ln 2 = 0.693). The top 5 configs differ by only 0.002 AUROC, much less than the seed-to-seed std (0.013), so the choice among them is essentially noise. pos_weight helped on average (mean grid AUROC 0.622 vs 0.612).
+
+**How I checked it:** _(fill in)_

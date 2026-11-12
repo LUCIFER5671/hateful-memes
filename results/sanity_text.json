@@ -1,0 +1,23 @@
+{
+  "a_dumb_baseline_dev": {
+    "accuracy": 0.506,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0,
+    "auroc": 0.5
+  },
+  "b_initial_loss": {
+    "loss": 0.6584590673446655,
+    "ln2": 0.6931471805599453,
+    "abs_diff": 0.03468811321527976
+  },
+  "c_tiny_overfit": {
+    "n_examples": 20,
+    "n_hateful": 3,
+    "epochs": 300,
+    "hidden_dim": 256,
+    "lr": 0.001,
+    "final_train_loss": 4.870825068792328e-05,
+    "train_accuracy": 1.0
+  }
+}
