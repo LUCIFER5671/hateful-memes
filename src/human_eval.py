@@ -33,9 +33,12 @@ def prepare(n: int = N, seed: int = SEED) -> pd.DataFrame:
 
 
 def score():
-    """Return (metrics dict, DataFrame of the memes guessed wrong incl. true labels),
+    """Return (metrics dict, DataFrame of the memes guessed wrong incl. true labels,
+    per-modality accuracy DataFrame or None if the sheet has no 'modality' column),
     or None if the sheet isn't completely filled in."""
-    sheet = pd.read_csv(LABELS_CSV, dtype={"id": str})
+    sheet = pd.read_csv(LABELS_CSV, dtype={"id": str}, keep_default_na=False)
+    if len(sheet) != N or sheet["id"].tolist() != pd.read_csv(IDS_CSV, dtype={"id": str})["id"].tolist():
+        raise ValueError("human_labels.csv ids don't match human_eval_ids.csv (count or order)")
     guess = pd.to_numeric(sheet["my_guess"], errors="coerce")
     if guess.isna().any() or not guess.isin([0, 1]).all():
         print("fill in results/human_labels.csv first")
@@ -44,5 +47,10 @@ def score():
     dev = load_split("dev")
     df = sheet.merge(dev[["id", "label", "img", "text", "path"]], on="id", how="left", validate="1:1")
     m = compute_metrics(df["label"], df["my_guess"])
-    wrong = df[df["my_guess"] != df["label"]].reset_index(drop=True)
-    return m, wrong
+    df["correct"] = (df["my_guess"] == df["label"]).astype(int)
+    wrong = df[df["correct"] == 0].reset_index(drop=True)
+    by_modality = None
+    if "modality" in df.columns:
+        by_modality = (df.groupby("modality")["correct"].agg(n="size", correct="sum", accuracy="mean")
+                       .reindex(["both", "image", "text"]).dropna(how="all"))
+    return m, wrong, by_modality

@@ -58,3 +58,19 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 **Results:** full-run time 317 s on the RTX 5060 (BERT 48 s, ResNet-18 110 s, CLIP 144 s for all splits); shapes train 8500 / dev 500 / test 1000 × (768 BERT, 512 ResNet, 512 CLIP image, 512 CLIP text); `embeddings/` = 94 MB (30 files incl. the 200-subsets), git-ignored.
 
 **How I checked it:** _(fill in)_
+
+---
+
+## 2026-11-12 — Part 0.3: Human baseline ("be the model", 20 dev memes)
+
+**Mode:** Creation (data entry, small code change).
+
+**What I asked:** Enter my own blind guesses (`my_guess`), `needed_both`, and a new `modality` column (both/image/text) into `results/human_labels.csv` in row order without changing ids; confirm 20 rows in the same id order as `results/human_eval_ids.csv`; run the scoring cell; report the metrics, the ids I got wrong (true label + modality) and accuracy per modality group; commit.
+
+**What Claude did:**
+- Entered my values exactly as given (the labeling decisions were mine, made blind before seeing labels). Verified 20 rows, ids unchanged and in the same order as `human_eval_ids.csv`, and that `needed_both = y` exactly where `modality = both`.
+- Extended `src/human_eval.score()` to check the id order and return per-modality accuracy; updated the notebook's scoring cell to show it plus a table of the wrong ids; re-executed the notebook.
+
+**Results:** accuracy 0.65 (13/20), precision 0.444, recall 0.667, F1 0.533. Wrong (my guess → true label): 89425 (0→1, both), 73021 (1→0, both), 37160 (1→0, both), 61085 (1→0, image), 23810 (0→1, text), 41728 (1→0, both), 37420 (1→0, both). Accuracy by modality: both 4/9 (0.44), image 4/5 (0.80), text 5/6 (0.83). The 20-meme sample has 6 hateful (30%) vs 49% in the full dev set.
+
+**How I checked it:** _(fill in)_
