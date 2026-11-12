@@ -34,6 +34,10 @@ My errors fell into two groups. Five of the seven were false alarms: I reacted t
 
 ## 4. Discussion
 
+**Which modality is more useful depended on the encoder.** With the baseline encoders, text was clearly more useful than images: BERT reached 0.627 dev AUROC and ResNet-18 only 0.537, barely above chance. This matched my hypothesis that text would be the more useful modality. With CLIP the order reversed: the image model reached 0.679 and the text model 0.645, a gap of 0.034, several times the seed standard deviation (0.003 and 0.005). Switching encoders barely changed the text model (+0.018 AUROC, BERT → CLIP) but greatly improved the image model (+0.142, ResNet-18 → CLIP). So my hypothesis was not wrong about memes in general. The image side was held back by the encoder, not by the modality.
+
+I think the reason is what each image encoder was trained to do. ResNet-18 was trained to classify ImageNet photos into 1,000 object categories, so its features describe which objects appear (a dog, a car, a person). The hateful meaning of a meme rarely depends on that: the same kind of stock photo or cartoon appears in both hateful and harmless memes, and the meaning depends on who is shown and how the image relates to the caption. The ResNet image model's dev AUROC even fell below 0.5 as training continued, which suggests that its features did not carry information that generalizes to dev. CLIP was trained on image–caption pairs from the web, which is much closer to how memes are made, so its image features capture the kind of concepts people describe in words. The lesson is that "is text or image more useful?" cannot be answered separately from the choice of encoder. A weak image encoder can make a modality look useless when it is not.
+
 ## ARI 510: Hypothesis and Design Change
 
 ## 5. Reflection
