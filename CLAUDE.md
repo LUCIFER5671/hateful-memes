@@ -24,6 +24,7 @@ Binary classification (1 = hateful, 0 = not hateful) of memes, using **frozen** 
 ## Rules
 - Every decision (hidden size, epochs, lr, fusion weight, threshold, …) is made on **dev**.
 - The **test set is evaluated exactly once**, at the very end, for all models together.
+- **After the test run, nothing changes:** no config, epoch, threshold, fusion weight or model may be modified or re-selected based on test results. Test numbers are reported as-is.
 - Fix random seeds (python, numpy, torch, cuda).
 - Compute embeddings **once** and cache them to `embeddings/*.pt`; load from cache afterwards.
 - Develop on a small subset (~200 examples) first, then run on everything.
