@@ -32,8 +32,10 @@ def plot_loss_curves(curves: dict, best_epoch: int, title: str, save_path=None):
         y = curves[key][best_epoch]
         a.axvline(best_epoch, color="gray", ls="--", lw=1)
         a.scatter([best_epoch], [y], color="black", zorder=4)
+        # label below-right of the marker so it never collides with the panel title
         a.annotate(f"best_epoch {best_epoch}\n{key.replace('_', ' ')} {y:.3f}", (best_epoch, y),
-                   textcoords="offset points", xytext=(8, -28 if key == "dev_loss" else 8), fontsize=9)
+                   textcoords="offset points", xytext=(8, -30), fontsize=9,
+                   bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8))
         a.set_xlabel("epoch (0 = untrained)")
         a.legend(frameon=False, fontsize=8, loc="best")
         a.spines[["top", "right"]].set_visible(False)

@@ -141,3 +141,33 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Grid: dev AUROC 0.620–0.635 across all 96 configs; top 5 within 0.003 (less than the seed std). Mean AUROC by lr: 1e-3 0.629, 3e-4 0.626, 1e-4 0.626, 3e-5 0.625. Mean best epoch by lr: 2.0 / 2.7 / 6.2 / 19.0. In 68 of 96 runs the untrained model (epoch 0) has the lowest dev loss.
 
 **How I checked it:** Checked that the sanity checks still passed after the change (initial loss 0.659, overfit 100%). Confirmed best_epoch was 2 for all three seeds from the per-seed table in the notebook, and saw on the seed-0 two-panel figure that AUROC also declines after its peak. The note's first claim contradicted this, so I had it rewritten. Noticed the retrain didn't reproduce the grid's 0.6348, and traced it to pos_weight being rounded in the CSV.
+
+---
+
+## 2026-11-12 — Step 5: Part 2 (image-only) + Part 3 (early and late fusion), dev only
+
+**Mode:** Creation (code) + Information (Claude's summary of the results).
+
+**What I asked:** Save dev predictions (id, label, prob per seed) for every model; image-only (ResNet-18) and early fusion (raw BERT + ResNet concatenated, 1280-d, standardized after concatenation) with the same 96-config grid, AUROC selection and early stopping, 3 seeds, saved grids/models/two-panel curves; late fusion as the per-seed average of the text and image probabilities (no training, threshold 0.5); add all to `dev_results.csv`; notebook sections "Part 2: Image-only" and "Part 3: Fusion" with an empty "Hypothesis check (dev)" cell for me; report without interpreting against my hypothesis; never touch the test split.
+
+**What Claude did:**
+- Added `load_concat` (`src/features.py`; checks that both encoders' rows are the same memes) and, in `src/experiments.py`, `save_dev_preds` / `load_dev_preds`, `late_fusion` (per-seed average of the saved dev probabilities, after checking ids and labels line up), `seed_metrics_from_preds`, `seed_table`, and `fit_select_record` (one pipeline for every trained model). The text model's dev predictions are now also saved from Part 1.
+- Ran both grids (image-only 31 min, early fusion ~30 min), then the notebook. Late fusion uses the saved per-seed predictions, which come from the per-seed models (only the seed-0 model of each is saved to `results/models/`).
+- Checks: the saved prediction files reproduce every dev_results number exactly; late_avg equals (text + image) / 2 for each seed; the test split stayed locked.
+- Fixed a figure bug: in the early-fusion figure the "best_epoch" label overlapped the panel title; labels now go below the marker. All three curve figures were regenerated (numbers unchanged).
+- Left the "Hypothesis check (dev)" cell empty for me.
+
+**Results (dev, mean ± std over seeds 0/1/2):**
+
+| model | accuracy | precision | recall | F1 | AUROC |
+|---|---|---|---|---|---|
+| always_not_hateful | 0.506 | 0.000 | 0.000 | 0.000 | 0.500 |
+| text_bert | 0.574 ± 0.012 | 0.602 ± 0.016 | 0.408 ± 0.035 | 0.485 ± 0.027 | 0.627 ± 0.007 |
+| image_resnet | 0.515 ± 0.001 | 0.569 ± 0.065 | 0.128 ± 0.098 | 0.194 ± 0.125 | 0.537 ± 0.006 |
+| early_concat | 0.580 ± 0.014 | 0.663 ± 0.026 | 0.304 ± 0.021 | 0.416 ± 0.025 | 0.664 ± 0.009 |
+| late_avg | 0.557 ± 0.010 | 0.639 ± 0.040 | 0.247 ± 0.067 | 0.352 ± 0.063 | 0.627 ± 0.011 |
+
+- Chosen configs: image_resnet hidden 512, lr 1e-3, dropout 0, wd 0, no pos_weight (best_epoch 1, 1, 2); early_concat hidden 256, lr 3e-4, dropout 0, wd 0, no pos_weight (best_epoch 30, 3, 5).
+- Things Claude flagged: image-only is close to chance (AUROC 0.537; grid range 0.524–0.542) and its dev AUROC falls *below* 0.5 after a few epochs (~0.46 by the end); the image grid's top 5 are within 0.001 and the chosen config (no pos_weight) has recall 0.04 at seed 0, while equally good configs with pos_weight have recall ~0.5; early fusion has the highest AUROC but lower F1 than text-only because its recall is low (no pos_weight, mean predicted probability 0.24 vs 49% hateful in dev); early fusion memorizes train (train loss → 0) and its best epoch varies a lot by seed (30 / 3 / 5), with dev loss up to 2.2 at the chosen epoch; late fusion's AUROC equals text-only's (0.627) and its F1 is lower.
+
+**How I checked it:** _(fill in)_

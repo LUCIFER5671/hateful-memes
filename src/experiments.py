@@ -152,3 +152,65 @@ def dev_table() -> pd.DataFrame:
         out[m] = [f"{a:.3f} ± {b:.3f}" for a, b in zip(df[f"{m}_mean"], df[f"{m}_std"])]
     out["runs"] = df["n_runs"]
     return out.set_index("model")
+
+
+# ---------------------------------------------------------------- dev predictions + fusion
+def preds_path(model_name: str) -> Path:
+    return RESULTS / f"preds_dev_{model_name}.csv"
+
+
+def save_dev_preds(model_name: str, runs, Xdev, meta_dev) -> pd.DataFrame:
+    """results/preds_dev_<model>.csv: id, label, prob_seed<k> for each run (dev split only)."""
+    df = pd.DataFrame({"id": meta_dev["id"].astype(str).values, "label": meta_dev["label"].astype(int).values})
+    for r in runs:
+        df[f"prob_seed{r.config['seed']}"] = predict_proba(r.model, Xdev).numpy()
+    df.to_csv(preds_path(model_name), index=False)
+    return df
+
+
+def load_dev_preds(model_name: str) -> pd.DataFrame:
+    return pd.read_csv(preds_path(model_name), dtype={"id": str})
+
+
+def seed_metrics_from_preds(df: pd.DataFrame, threshold: float = 0.5) -> list:
+    """compute_metrics for each prob_seed<k> column (threshold on the probability)."""
+    cols = sorted(c for c in df.columns if c.startswith("prob_seed"))
+    return [compute_metrics(df["label"], (df[c] >= threshold).astype(int), df[c]) for c in cols]
+
+
+def late_fusion(model_names=("text_bert", "image_resnet"), weights=None, out_name="late_avg") -> pd.DataFrame:
+    """Late fusion, no training: for each seed k, p = sum_m w_m * p_m(seed k) over the saved dev predictions
+    of each model (default: plain average). Writes results/preds_dev_<out_name>.csv and returns it."""
+    preds = [load_dev_preds(m) for m in model_names]
+    base = preds[0]
+    for m, p in zip(model_names[1:], preds[1:]):
+        assert p["id"].tolist() == base["id"].tolist() and p["label"].tolist() == base["label"].tolist(), \
+            f"dev rows of {model_names[0]} and {m} don't line up"
+    w = np.full(len(model_names), 1 / len(model_names)) if weights is None else np.asarray(weights, float)
+    assert np.isclose(w.sum(), 1.0), "weights must sum to 1"
+    cols = sorted(c for c in base.columns if c.startswith("prob_seed"))
+    out = base[["id", "label"]].copy()
+    for c in cols:
+        out[c] = sum(wi * p[c] for wi, p in zip(w, preds))
+    out.to_csv(preds_path(out_name), index=False)
+    return out
+
+
+def fit_select_record(model_name, Xtr, ytr, Xdev, ydev, meta_dev, notes_prefix=""):
+    """The full per-model pipeline used for every trained model: grid (cached) -> pick the top config by dev AUROC
+    -> retrain with seeds 0,1,2 -> save the seed-0 model, the dev predictions and the dev_results row.
+    Returns (grid, best_config, runs)."""
+    from src.train import save_model
+    grid = run_grid(model_name, Xtr, ytr, Xdev, ydev, verbose=False)
+    cfg = config_from_row(grid.iloc[0])
+    runs = run_seeds(Xtr, ytr, Xdev, ydev, cfg)
+    save_model(runs[0], model_name)
+    save_dev_preds(model_name, runs, Xdev, meta_dev)
+    record_dev_result(model_name, [r.dev_metrics for r in runs], notes=f"{notes_prefix}{cfg}; seeds 0,1,2")
+    return grid, cfg, runs
+
+
+def seed_table(runs) -> pd.DataFrame:
+    return pd.DataFrame([{"seed": r.config["seed"], "best_epoch (max dev AUROC)": r.best_epoch,
+                          "min dev loss epoch": int(np.argmin(r.curves["dev_loss"])), **r.dev_metrics}
+                         for r in runs]).round(4)

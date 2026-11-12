@@ -48,3 +48,15 @@ def load_features(split: str, encoder: str, tag: str = "all"):
     assert meta["id"].tolist() == expected_ids, f"{split}/{encoder}: meta ids don't match jsonl order"
     y = torch.tensor(meta["label"].to_numpy(), dtype=torch.float32)
     return X, y, meta
+
+
+def load_concat(split: str, encoders=("text_bert", "image_resnet"), tag: str = "all"):
+    """Early fusion input: raw embeddings of several encoders concatenated along dim 1, in the given order
+    (standardization happens later, inside train_classifier, on the concatenated vector).
+    Returns (X [n, sum of dims], y, meta); asserts every encoder's rows refer to the same memes."""
+    parts = [load_features(split, e, tag) for e in encoders]
+    X0, y0, m0 = parts[0]
+    for e, (X, y, m) in zip(encoders[1:], parts[1:]):
+        assert m["id"].tolist() == m0["id"].tolist(), f"{split}: row ids differ between {encoders[0]} and {e}"
+        assert torch.equal(y, y0)
+    return torch.cat([p[0] for p in parts], dim=1), y0, m0
