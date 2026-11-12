@@ -171,3 +171,37 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Things Claude flagged: image-only is close to chance (AUROC 0.537; grid range 0.524–0.542) and its dev AUROC falls *below* 0.5 after a few epochs (~0.46 by the end); the image grid's top 5 are within 0.001 and the chosen config (no pos_weight) has recall 0.04 at seed 0, while equally good configs with pos_weight have recall ~0.5; early fusion has the highest AUROC but lower F1 than text-only because its recall is low (no pos_weight, mean predicted probability 0.24 vs 49% hateful in dev); early fusion memorizes train (train loss → 0) and its best epoch varies a lot by seed (30 / 3 / 5), with dev loss up to 2.2 at the chosen epoch; late fusion's AUROC equals text-only's (0.627) and its F1 is lower.
 
 **How I checked it:** Opened preds_dev_late_avg.csv and confirmed it has 500 rows with one probability column per seed. Checked the curves: image-only dev AUROC falls below 0.5 as training continues, and early fusion overfits (train loss ~0, dev loss ~2.2). Noticed that early fusion has the best AUROC but a lower F1 than text-only, which comes from its low recall without pos_weight, so I rely on AUROC to compare models.
+
+---
+
+## 2026-11-12 — Step 6: ARI 510 design change (CLIP encoders) + ARI 410 disagreement analysis, dev only
+
+**Mode:** Creation (code) + Information (Claude's summary of the results).
+
+**What I asked:** Train clip_text (512-d), clip_image (512-d), clip_early_concat (1024-d raw concat) and clip_late_avg (per-seed average) with the exact same train function, 96-config grid, AUROC selection/early stopping and 3 seeds; save grids, models, curves and dev predictions and add all four to `dev_results.csv`; a 9-model comparison table and AUROC bar chart (`figures/dev_auroc_comparison.png`) with F1 too; state the AUROC change of clip_early_concat vs early_concat as numbers only and whether it exceeds the seed std, without interpreting against my hypothesis; for the 410 analysis, seed-0 dev predictions at threshold 0.5 → `results/disagreements_dev.csv`, pick 3 memes, show them with `show_meme` and their predictions, and leave empty "410: meme <id>" cells for me; never touch the test split.
+
+**What Claude did:**
+- Added `auroc_gap` (`src/experiments.py`), `plot_auroc_comparison` (`src/plots.py`) and `src/analysis.py` (`seed_predictions`, `disagreements`, `pick_examples`, `summary`). Reused `fit_select_record` and `late_fusion` from Step 5 unchanged.
+- Ran the three CLIP grids (24, 27 and 27 min), then the notebook. Moved the legends of the loss/AUROC curve figures below the axes because the best_epoch label overlapped the legend in the CLIP early-fusion figure; all curve figures were regenerated (numbers unchanged).
+- 410 picks were made mechanically (fixed random seed 510, without looking at the memes): two where fusion was right and text-only was wrong (preferring memes where both fusion models were right), and one where early fusion was wrong while both single-modality models were right. Claude did not look at or describe the memes; the "410: meme <id>" cells are left empty for me.
+- Checks: no notebook errors; the test split stayed locked.
+
+**Results (dev, mean ± std over seeds 0/1/2):**
+
+| model | AUROC | F1 |
+|---|---|---|
+| always_not_hateful | 0.500 | 0.000 |
+| text_bert | 0.627 ± 0.007 | 0.485 ± 0.027 |
+| image_resnet | 0.537 ± 0.006 | 0.194 ± 0.125 |
+| early_concat | 0.664 ± 0.009 | 0.416 ± 0.025 |
+| late_avg | 0.627 ± 0.011 | 0.352 ± 0.063 |
+| clip_text | 0.645 ± 0.005 | 0.383 ± 0.003 |
+| clip_image | 0.679 ± 0.003 | 0.534 ± 0.031 |
+| clip_early_concat | 0.749 ± 0.005 | 0.591 ± 0.009 |
+| clip_late_avg | 0.695 ± 0.005 | 0.486 ± 0.019 |
+
+- Chosen configs: clip_text hidden 64, lr 3e-4, dropout 0.3, wd 1e-4, no pos_weight (best_epoch 5, 6, 5); clip_image hidden 512, lr 1e-4, dropout 0, wd 0, pos_weight 1.82 (best_epoch 33, 18, 69); clip_early_concat hidden 256, lr 1e-3, dropout 0, wd 1e-4, pos_weight 1.82 (best_epoch 62, 27, 90).
+- clip_early_concat vs early_concat: +0.085 AUROC (0.749 vs 0.664); larger seed std 0.009, so the gap is about 9.6× the seed std.
+- 410: 139 dev memes where a fusion model was right and a single-modality model wrong (69 with text wrong, 89 with image wrong); 202 where early_concat was wrong (7 of them with both single models right). Picked ids: 50379, 01967 (fusion right), 57208 (fusion wrong).
+
+**How I checked it:** _(to fill in)_

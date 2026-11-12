@@ -214,3 +214,14 @@ def seed_table(runs) -> pd.DataFrame:
     return pd.DataFrame([{"seed": r.config["seed"], "best_epoch (max dev AUROC)": r.best_epoch,
                           "min dev loss epoch": int(np.argmin(r.curves["dev_loss"])), **r.dev_metrics}
                          for r in runs]).round(4)
+
+
+def auroc_gap(model_a: str, model_b: str) -> pd.Series:
+    """AUROC(model_a) - AUROC(model_b) on dev (3-seed means), next to each model's seed std."""
+    d = pd.read_csv(DEV_RESULTS_CSV).set_index("model")
+    gap = d.loc[model_a, "auroc_mean"] - d.loc[model_b, "auroc_mean"]
+    sa, sb = d.loc[model_a, "auroc_std"], d.loc[model_b, "auroc_std"]
+    return pd.Series({f"AUROC {model_a}": d.loc[model_a, "auroc_mean"], f"AUROC {model_b}": d.loc[model_b, "auroc_mean"],
+                      "gap (a - b)": gap, f"seed std {model_a}": sa, f"seed std {model_b}": sb,
+                      "|gap| > larger seed std": bool(abs(gap) > max(sa, sb)),
+                      "|gap| / larger seed std": abs(gap) / max(sa, sb)})

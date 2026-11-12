@@ -37,7 +37,8 @@ def plot_loss_curves(curves: dict, best_epoch: int, title: str, save_path=None):
                    textcoords="offset points", xytext=(8, -30), fontsize=9,
                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8))
         a.set_xlabel("epoch (0 = untrained)")
-        a.legend(frameon=False, fontsize=8, loc="best")
+        # legend below the axes so it never collides with the curves or the best_epoch label
+        a.legend(frameon=False, fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=2)
         a.spines[["top", "right"]].set_visible(False)
     fig.suptitle(title, fontsize=11)
     fig.tight_layout()
@@ -61,6 +62,29 @@ def plot_label_distribution(splits: dict[str, pd.DataFrame], save_path=None):
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("number of memes")
     fig.suptitle("Hateful Memes: label distribution per split (note different y-scales)", fontsize=11)
+    fig.tight_layout()
+    if save_path:
+        Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(save_path, dpi=150, bbox_inches="tight")
+    return fig
+
+
+def plot_auroc_comparison(dev_results: pd.DataFrame, models: list, save_path=None, clip_prefix: str = "clip_"):
+    """Bar chart of dev AUROC (mean, with seed std as error bars) for the given models, in order.
+    `dev_results` is results/dev_results.csv. CLIP models get a different colour."""
+    d = dev_results.set_index("model").loc[models]
+    colors = ["#BBBBBB" if m == "always_not_hateful" else ("#8172B3" if m.startswith(clip_prefix) else "#4C72B0")
+              for m in models]
+    fig, ax = plt.subplots(figsize=(10, 4.4))
+    x = np.arange(len(models))
+    bars = ax.bar(x, d["auroc_mean"], yerr=d["auroc_std"], capsize=4, color=colors, width=0.7)
+    ax.bar_label(bars, labels=[f"{v:.3f}" for v in d["auroc_mean"]], padding=6, fontsize=8)
+    ax.axhline(0.5, color="gray", lw=0.8, ls=":")
+    ax.set_xticks(x, models, rotation=25, ha="right")
+    ax.set_ylim(0.45, max(d["auroc_mean"] + d["auroc_std"]) + 0.04)
+    ax.set_ylabel("dev AUROC (mean ± std, 3 seeds)")
+    ax.set_title("Dev AUROC by model: baseline encoders (blue) vs CLIP (purple)")
+    ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     if save_path:
         Path(save_path).parent.mkdir(parents=True, exist_ok=True)
