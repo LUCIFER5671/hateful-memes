@@ -39,3 +39,22 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - Claude did not view or describe any meme images or texts.
 
 **How I checked it:** _(fill in)_
+
+---
+
+## 2026-11-12 — Step 3: Compute and cache embeddings (BERT, ResNet-18, CLIP)
+
+**Mode:** Creation (code) + Advice/feedback (Claude flagged a CLIP configuration problem).
+
+**What I asked:** Write `src/embed.py` with three frozen encoders on the GPU (BERT-base-uncased [CLS] at max_length 128; ResNet-18 with fc=Identity and its own transforms; open_clip ViT-B-32 "openai", with image and text saved separately and raw). Cache to `embeddings/{split}_{encoder}_{tag}.pt` + meta csv, loading instead of recomputing, with a CLI. Run on a 200-item subset first and check shapes / NaN / row order / determinism (re-embed 4 items, allclose atol 1e-4), then run on everything. Add `src/features.py` `load_features`, add an "Embeddings" notebook section with an empty "Why remove ResNet's final layer?" cell for me, commit and push.
+
+**What Claude did:**
+- Wrote `src/embed.py` (encoders, caching, `--check`) and `src/features.py`. Determinism measures: TF32 off, deterministic cuDNN, fixed seeds, and BERT padded to a fixed 128 tokens so a text's vector doesn't depend on the other texts in its batch. Image DataLoader uses num_workers=0 (Windows).
+- **Problem found:** the first subset run printed `QuickGELU mismatch ... pretrained tag 'openai' (quick_gelu=True)`. OpenAI's CLIP weights were trained with QuickGELU but open_clip's plain "ViT-B-32" config uses GELU, so the CLIP vectors would have been silently slightly wrong. Fixed with `force_quick_gelu=True`, deleted the bad CLIP cache and recomputed it. Verified the fix: CLIP picks each meme's own text out of 200 candidates 62–65% of the time (chance = 0.5%).
+- Subset (200) checks: all shapes right, all finite, ids/labels match jsonl order, determinism max |diff| ≤ 2.5e-5. Then the full run (timings below) passed the same checks; the first 200 rows of the full run match the subset run (≤ 2.6e-5).
+- Extra check: many rows are exact duplicates. Claude counted them (counts only, no text) and found the dataset's confounder design: e.g. in dev, 79 groups of memes share identical text, and 78 of those groups contain both labels; 22% of dev texts and 19% of test texts also appear in train. Identical images are rarer (dev: 3 groups).
+- Executed the notebook; the "Embeddings" section prints all 12 shapes. The ResNet explanation cell was left empty for me.
+
+**Results:** full-run time 317 s on the RTX 5060 (BERT 48 s, ResNet-18 110 s, CLIP 144 s for all splits); shapes train 8500 / dev 500 / test 1000 × (768 BERT, 512 ResNet, 512 CLIP image, 512 CLIP text); `embeddings/` = 94 MB (30 files incl. the 200-subsets), git-ignored.
+
+**How I checked it:** _(fill in)_

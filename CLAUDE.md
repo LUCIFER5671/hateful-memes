@@ -34,6 +34,9 @@ Binary classification (1 = hateful, 0 = not hateful) of memes, using **frozen** 
 - `embeddings/` — cached embedding tensors (`.pt`), git-ignored.
 - `src/` — reusable code. `src/data.py`: `load_split(name)` → DataFrame with absolute `path` column; `python -m src.data` re-runs dataset checks.
 - `src/plots.py` (figures), `src/metrics.py` (`compute_metrics(y_true, y_pred, y_prob=None)` → accuracy/precision/recall/F1[/AUROC], zero_division=0 — use for every model), `src/human_eval.py` (Part 0.3 blind labeling; never overwrites `results/human_labels.csv`).
+- `src/embed.py` — frozen encoders + cache (`python -m src.embed --subset 200|all [--encoders ...] [--check]`). Files: `embeddings/{split}_{text_bert|image_resnet|clip_image|clip_text}_{200|all}.pt` + `{split}_meta_{tag}.csv`. CLIP = open_clip ViT-B-32 `openai` with `force_quick_gelu=True` (without it the activations don't match the weights); CLIP vectors are stored raw (normalize later). BERT pads to max_length=128 so vectors don't depend on batch.
+- `src/features.py` — `load_features(split, encoder, tag="all")` → (X float32, y float32, meta); use this for all training.
+- Dataset quirk (confounders): many memes share identical text (dev: 79 groups, 78 with mixed labels; 22% of dev texts also appear in train) or identical images. Identical inputs → identical embeddings → a single-modality model must miss some of these.
 - `notebooks/lab3.ipynb` — the single submitted notebook (kernel "Python (hateful-memes)"); later steps append sections. Keep cells short (imports, calls, plots); logic goes in `src/`. Inline figures are JPEG to keep it small. Execute with `jupyter nbconvert --to notebook --execute --inplace notebooks/lab3.ipynb`.
 - `notes/` — the user's own writing (`part0_notes.md`, `work_log.md`). Do NOT fill these in.
 - `figures/`, `results/` (`human_eval_ids.csv`, `human_labels.csv` filled in by the user).
