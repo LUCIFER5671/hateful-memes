@@ -32,6 +32,44 @@ My errors fell into two groups. Five of the seven were false alarms: I reacted t
 
 ## 3. Results
 
+All numbers are mean ± std over three training seeds (0, 1, 2) at the fixed 0.5 threshold; the always-"not hateful" baseline is a single deterministic run. Every configuration, epoch and threshold was chosen on dev (Table 1) before the test set was evaluated once (Table 2).
+
+*Table 1: Dev (dev_seen, 500 memes) results.*
+
+| model | accuracy | precision | recall | F1 | AUROC |
+|---|---|---|---|---|---|
+| always_not_hateful | 0.506 | 0.000 | 0.000 | 0.000 | 0.500 |
+| text_bert | 0.574 ± 0.012 | 0.602 ± 0.016 | 0.408 ± 0.035 | 0.485 ± 0.027 | 0.627 ± 0.007 |
+| image_resnet | 0.515 ± 0.001 | 0.569 ± 0.065 | 0.128 ± 0.098 | 0.194 ± 0.125 | 0.537 ± 0.006 |
+| early_concat | 0.580 ± 0.014 | 0.663 ± 0.026 | 0.304 ± 0.021 | 0.416 ± 0.025 | 0.664 ± 0.009 |
+| late_avg | 0.557 ± 0.010 | 0.639 ± 0.040 | 0.247 ± 0.067 | 0.352 ± 0.063 | 0.627 ± 0.011 |
+| clip_text | 0.571 ± 0.006 | 0.661 ± 0.019 | 0.270 ± 0.002 | 0.383 ± 0.003 | 0.645 ± 0.005 |
+| clip_image | 0.613 ± 0.005 | 0.660 ± 0.015 | 0.451 ± 0.052 | 0.534 ± 0.031 | 0.679 ± 0.003 |
+| **clip_early_concat (510 design change)** | 0.671 ± 0.005 | 0.769 ± 0.033 | 0.480 ± 0.024 | 0.591 ± 0.009 | **0.749 ± 0.005** |
+| clip_late_avg | 0.611 ± 0.012 | 0.700 ± 0.018 | 0.372 ± 0.018 | 0.486 ± 0.019 | 0.695 ± 0.005 |
+
+![Figure 3: Dev AUROC by model.](../figures/dev_auroc_comparison.png)
+
+*Figure 3: Dev AUROC by model (mean ± std over 3 seeds). Blue: BERT / ResNet-18 encoders; purple: CLIP ViT-B/32 encoders; grey: always-"not hateful" baseline.*
+
+*Table 2: Test (test_seen, 1,000 memes) results, evaluated once.*
+
+| model | accuracy | precision | recall | F1 | AUROC |
+|---|---|---|---|---|---|
+| always_not_hateful | 0.510 | 0.000 | 0.000 | 0.000 | 0.500 |
+| text_bert | 0.616 ± 0.003 | 0.649 ± 0.025 | 0.475 ± 0.052 | 0.547 ± 0.026 | 0.676 ± 0.009 |
+| image_resnet | 0.516 ± 0.002 | 0.533 ± 0.019 | 0.131 ± 0.102 | 0.196 ± 0.126 | 0.544 ± 0.005 |
+| early_concat | 0.611 ± 0.006 | 0.692 ± 0.009 | 0.373 ± 0.025 | 0.485 ± 0.020 | 0.701 ± 0.005 |
+| late_avg | 0.583 ± 0.014 | 0.674 ± 0.025 | 0.296 ± 0.085 | 0.406 ± 0.074 | 0.676 ± 0.010 |
+| clip_text | 0.592 ± 0.007 | 0.667 ± 0.014 | 0.333 ± 0.014 | 0.444 ± 0.013 | 0.682 ± 0.002 |
+| clip_image | 0.612 ± 0.007 | 0.665 ± 0.024 | 0.424 ± 0.036 | 0.516 ± 0.021 | 0.673 ± 0.005 |
+| **clip_early_concat (510 design change)** | 0.681 ± 0.009 | 0.742 ± 0.016 | 0.536 ± 0.028 | 0.622 ± 0.017 | **0.774 ± 0.009** |
+| clip_late_avg | 0.611 ± 0.004 | 0.702 ± 0.008 | 0.359 ± 0.007 | 0.475 ± 0.008 | 0.711 ± 0.004 |
+
+![Figure 4: Test AUROC by model.](../figures/test_auroc_comparison.png)
+
+*Figure 4: Test AUROC by model (mean ± std over 3 seeds), same models and colours as Figure 3.*
+
 ## 4. Discussion
 
 **Which modality is more useful depended on the encoder.** With the baseline encoders, text was clearly more useful than images: BERT reached 0.627 dev AUROC and ResNet-18 only 0.537, barely above chance. This matched my hypothesis that text would be the more useful modality. With CLIP the order reversed: the image model reached 0.679 and the text model 0.645, a gap of 0.034, several times the seed standard deviation (0.003 and 0.005). Switching encoders barely changed the text model (+0.018 AUROC, BERT → CLIP) but greatly improved the image model (+0.142, ResNet-18 → CLIP). So my hypothesis was not wrong about memes in general. The image side was held back by the encoder, not by the modality.
