@@ -204,4 +204,4 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - clip_early_concat vs early_concat: +0.085 AUROC (0.749 vs 0.664); larger seed std 0.009, so the gap is about 9.6× the seed std.
 - 410: 139 dev memes where a fusion model was right and a single-modality model wrong (69 with text wrong, 89 with image wrong); 202 where early_concat was wrong (7 of them with both single models right). Picked ids: 50379, 01967 (fusion right), 57208 (fusion wrong).
 
-**How I checked it:** _(to fill in)_
+**How I checked it:** Checked the AUROC bar chart against the dev table and confirmed the +0.085 CLIP vs. BERT+ResNet early-fusion gap is far larger than the seed std (0.009). Noticed that with CLIP, image-only beats text-only, the reverse of BERT/ResNet. Confirmed disagreements_dev.csv exists and the 3 memes were picked by a fixed seed rather than hand-picked.
