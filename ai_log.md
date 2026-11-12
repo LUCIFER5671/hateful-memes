@@ -118,3 +118,26 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 **What Claude did:** Created `report/report.md` with the report structure from the lab PDF (§10–11). Inserted my Section 1 text word for word with Figure 1 and a caption; left all other sections empty for me. Filled the "Report writing" row of the AI-use table as I worded it. Before inserting, Claude re-computed every number in the section (split sizes and % hateful, my 13/20 and precision/recall/F1, the 9/5/6 modality counts and 4/9, 4/5, 5/6 accuracies, the 5 false alarms and the two missed ids, 6/20 hateful in my sample); all matched. Note: the text arrived already polished; I polished it with Claude (in a separate chat) and Grammarly, not in this Claude Code session.
 
 **How I checked it:** Verified every number against `results/human_labels.csv` and the notebook output.
+
+---
+
+## 2026-11-12 — Step 4 fix: early stopping on dev AUROC, slower learning rates
+
+**Mode:** Creation (code) + Advice/feedback (Claude checked its own results and corrected them).
+
+**What I asked:** In `train_classifier`, add `early_stop_metric` ("auroc" default, or "loss") and record epoch 0 and dev AUROC per epoch; add lr 1e-4 and 3e-5 to the grid with up to 100 epochs; rerun the grid and the 3-seed retrain with AUROC early stopping, re-save `text_bert.pt`, update `dev_results.csv`; make the curves figure two panels (loss, dev AUROC) with best_epoch marked; rerun the sanity checks; add a markdown note explaining why we stop on dev AUROC; no test split.
+
+**What Claude did:**
+- `src/train.py`: `early_stop_metric` in {"auroc" (default), "loss", "last"}; "last" was added so the tiny-batch overfit check still reports the final epoch (with "auroc" it would return whichever early epoch first hit AUROC 1.0). Curves now include epoch 0 (untrained) and `dev_auroc`; best_epoch can be 0. Per-batch loss is accumulated on the GPU (fewer syncs).
+- `src/experiments.py`: grid lr {1e-3, 3e-4, 1e-4, 3e-5}, 100 epochs, AUROC early stopping (96 configs, 25 min); the grid CSV records the early-stopping setting, the max epochs and the min-dev-loss epoch, and a cached grid made with different settings now raises instead of being silently reused. `src/plots.py`: two-panel figure.
+- **Bug found and fixed by Claude:** the first 3-seed retrain gave seed-0 AUROC 0.6358, but the identical grid run gave 0.6348. Claude checked that training is deterministic (same AUROC to 6 decimals within and across processes), and traced the difference to the grid CSV storing pos_weight rounded to "1.8155" while training had used the exact 1.8155018…; the retrain read back the rounded value. Fixed by storing the exact value (repr) and correcting the existing CSV in place (the grid itself had used the exact value, so its results stand). After the fix, seed 0 reproduces the grid's 0.6348 exactly.
+- **Note corrected by Claude:** the first draft of the notebook note said dev AUROC "keeps improving for longer" than dev loss; the actual curves show AUROC peaks at epoch 2 and then also declines, so the note was rewritten to match (plus the finding that slower learning rates delay the AUROC peak but don't raise it).
+- Sanity checks rerun in the notebook with explicit asserts: unchanged and PASS. Test split never loaded.
+
+**Results:**
+- Chosen config (best dev AUROC 0.6348): hidden 64, lr 1e-3, dropout 0, weight decay 0, pos_weight = n_neg/n_pos = 1.8155, early stopping on dev AUROC.
+- best_epoch (max dev AUROC) per seed: 2, 2, 2. Epoch of minimum dev loss: 0, 0, 1.
+- Dev, 3 seeds: accuracy 0.574 ± 0.012, precision 0.602 ± 0.016, recall 0.408 ± 0.035, F1 0.485 ± 0.027, AUROC 0.627 ± 0.007 (previous dev-loss-stopping version: AUROC 0.621 ± 0.013).
+- Grid: dev AUROC 0.620–0.635 across all 96 configs; top 5 within 0.003 (less than the seed std). Mean AUROC by lr: 1e-3 0.629, 3e-4 0.626, 1e-4 0.626, 3e-5 0.625. Mean best epoch by lr: 2.0 / 2.7 / 6.2 / 19.0. In 68 of 96 runs the untrained model (epoch 0) has the lowest dev loss.
+
+**How I checked it:** _(fill in)_

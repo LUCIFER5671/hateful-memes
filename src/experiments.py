@@ -87,7 +87,7 @@ def run_grid(name, Xtr, ytr, Xdev, ydev, grid=GRID, epochs=MAX_EPOCHS, seed=0, e
         t = time.perf_counter()
         res = train_classifier(Xtr, ytr, Xdev, ydev, epochs=epochs, seed=seed, early_stop_metric=early_stop_metric,
                                **{k: v for k, v in cfg.items() if k != "pos_weight"}, pos_weight=pw)
-        rows.append({**cfg, "pos_weight": "none" if pw is None else f"{pw:.4f}",
+        rows.append({**cfg, "pos_weight": "none" if pw is None else repr(pw),  # exact value, so retraining matches
                      "early_stop_metric": early_stop_metric, "max_epochs": epochs, "best_epoch": res.best_epoch,
                      "min_dev_loss_epoch": int(np.argmin(res.curves["dev_loss"])),
                      **{f"dev_{k}": v for k, v in res.dev_metrics.items()}, "seconds": time.perf_counter() - t})
