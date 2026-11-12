@@ -205,3 +205,35 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 - 410: 139 dev memes where a fusion model was right and a single-modality model wrong (69 with text wrong, 89 with image wrong); 202 where early_concat was wrong (7 of them with both single models right). Picked ids: 50379, 01967 (fusion right), 57208 (fusion wrong).
 
 **How I checked it:** Checked the AUROC bar chart against the dev table and confirmed the +0.085 CLIP vs. BERT+ResNet early-fusion gap is far larger than the seed std (0.009). Noticed that with CLIP, image-only beats text-only, the reverse of BERT/ResNet. Confirmed disagreements_dev.csv exists and the 3 memes were picked by a fixed seed rather than hand-picked.
+
+---
+
+## 2026-11-12 — Step 7: final test-set evaluation (single run)
+
+**Mode:** Creation (code) + Information (Claude's summary of the results).
+
+**What I asked:** Commit and tag the frozen state (`pre-test-eval`) before touching test; write `src/evaluate_test.py` that loads the saved seed 0/1/2 models (not retrained) and evaluates all 9 models on test_seen at threshold 0.5, with each model's stored train standardization and the same seed-paired late fusion as on dev; mean ± std over 3 seeds with `compute_metrics`; refuse to run if `results/test_results.csv` exists unless `--force` (never used); save the test results and per-model test predictions; add "Part 4: Final comparison (test)" to the notebook with the test table (510 design change marked), a dev vs test AUROC table, `figures/test_auroc_comparison.png` and an empty "Discussion notes" cell for me; report facts only.
+
+**What Claude did:**
+- Tagged `pre-test-eval` on the clean, frozen state (commit ee72f68).
+- Found that Steps 4–6 had saved only the seed-0 model of each classifier to disk. Instead of retraining after seeing test, wrote `src/restore_seed_models.py`, which (before test was opened, train/dev only) retrained seeds 0/1/2 with each model's frozen config (top row of its saved grid) and saved them only after checking they were identical to Steps 4–6: seed-0 weights bit-identical to the saved model, and every seed's dev probabilities equal to `results/preds_dev_<model>.csv` (max difference ~3e-8). All 6 models passed; best epochs were the same as reported before. Also changed `fit_select_record` to save every seed from now on.
+- Wrote `src/evaluate_test.py` (the only code that calls `unlock_test()`), ran it once from the command line, and confirmed that a second call is refused by the guard. `--force` was never used.
+- Added Part 4 to the notebook; it only reads the saved test results, so re-running the notebook never re-evaluates test. After executing the notebook, checked that the seed models and `test_results.csv` were unchanged and the dev results/figures had no diff.
+
+**Results (test, mean ± std over seeds 0/1/2, threshold 0.5):**
+
+| model | accuracy | precision | recall | F1 | AUROC |
+|---|---|---|---|---|---|
+| always_not_hateful | 0.510 | 0.000 | 0.000 | 0.000 | 0.500 |
+| text_bert | 0.616 ± 0.003 | 0.649 ± 0.025 | 0.475 ± 0.052 | 0.547 ± 0.026 | 0.676 ± 0.009 |
+| image_resnet | 0.516 ± 0.002 | 0.533 ± 0.019 | 0.131 ± 0.102 | 0.196 ± 0.126 | 0.544 ± 0.005 |
+| early_concat | 0.611 ± 0.006 | 0.692 ± 0.009 | 0.374 ± 0.025 | 0.485 ± 0.020 | 0.701 ± 0.005 |
+| late_avg | 0.583 ± 0.014 | 0.674 ± 0.025 | 0.296 ± 0.085 | 0.406 ± 0.074 | 0.676 ± 0.010 |
+| clip_text | 0.592 ± 0.007 | 0.667 ± 0.014 | 0.333 ± 0.015 | 0.444 ± 0.013 | 0.682 ± 0.002 |
+| clip_image | 0.612 ± 0.007 | 0.665 ± 0.024 | 0.424 ± 0.036 | 0.516 ± 0.021 | 0.673 ± 0.005 |
+| clip_early_concat (510 design change) | 0.681 ± 0.009 | 0.742 ± 0.016 | 0.536 ± 0.028 | 0.622 ± 0.017 | 0.774 ± 0.009 |
+| clip_late_avg | 0.611 ± 0.004 | 0.702 ± 0.008 | 0.359 ± 0.007 | 0.475 ± 0.008 | 0.711 ± 0.004 |
+
+- Test AUROC differs from dev AUROC by more than 0.03 for: text_bert (+0.049), early_concat (+0.037), late_avg (+0.049), clip_text (+0.037).
+
+**How I checked it:** _(to fill in)_

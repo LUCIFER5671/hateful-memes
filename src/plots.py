@@ -69,9 +69,11 @@ def plot_label_distribution(splits: dict[str, pd.DataFrame], save_path=None):
     return fig
 
 
-def plot_auroc_comparison(dev_results: pd.DataFrame, models: list, save_path=None, clip_prefix: str = "clip_"):
-    """Bar chart of dev AUROC (mean, with seed std as error bars) for the given models, in order.
-    `dev_results` is results/dev_results.csv. CLIP models get a different colour."""
+def plot_auroc_comparison(dev_results: pd.DataFrame, models: list, save_path=None, clip_prefix: str = "clip_",
+                          split: str = "dev"):
+    """Bar chart of AUROC (mean, with seed std as error bars) for the given models, in order.
+    `dev_results` is results/dev_results.csv (or results/test_results.csv with split="test").
+    CLIP models get a different colour."""
     d = dev_results.set_index("model").loc[models]
     colors = ["#BBBBBB" if m == "always_not_hateful" else ("#8172B3" if m.startswith(clip_prefix) else "#4C72B0")
               for m in models]
@@ -82,8 +84,8 @@ def plot_auroc_comparison(dev_results: pd.DataFrame, models: list, save_path=Non
     ax.axhline(0.5, color="gray", lw=0.8, ls=":")
     ax.set_xticks(x, models, rotation=25, ha="right")
     ax.set_ylim(0.45, max(d["auroc_mean"] + d["auroc_std"]) + 0.04)
-    ax.set_ylabel("dev AUROC (mean ± std, 3 seeds)")
-    ax.set_title("Dev AUROC by model: baseline encoders (blue) vs CLIP (purple)")
+    ax.set_ylabel(f"{split} AUROC (mean ± std, 3 seeds)")
+    ax.set_title(f"{split.capitalize()} AUROC by model: baseline encoders (blue) vs CLIP (purple)")
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     if save_path:

@@ -205,6 +205,8 @@ def fit_select_record(model_name, Xtr, ytr, Xdev, ydev, meta_dev, notes_prefix="
     cfg = config_from_row(grid.iloc[0])
     runs = run_seeds(Xtr, ytr, Xdev, ydev, cfg)
     save_model(runs[0], model_name)
+    for r in runs:  # every seed, so the final test evaluation can load them without retraining
+        save_model(r, f"{model_name}_seed{r.config['seed']}")
     save_dev_preds(model_name, runs, Xdev, meta_dev)
     record_dev_result(model_name, [r.dev_metrics for r in runs], notes=f"{notes_prefix}{cfg}; seeds 0,1,2")
     return grid, cfg, runs
