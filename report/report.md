@@ -78,6 +78,20 @@ All numbers are mean ± std over three training seeds (0, 1, 2) at the fixed 0.5
 
 **Comparison with the original paper.** My frozen-encoder baselines land close to the fine-tuned baselines in Kiela et al. (2020, NeurIPS version): text-only 67.6 vs 69.0, late fusion 67.6 vs 69.3, and BERT+ResNet early fusion 70.1 vs Concat BERT's 67.8 in test AUROC. On dev, my text-only model was about 2.4 points lower than theirs (62.7 vs 65.05), so I would call these effectively equivalent, given that my dev and test numbers alone differ by about 5 points. My CLIP early fusion (77.4) exceeds the paper's best baseline, VisualBERT COCO (75.4), despite using frozen encoders and a small classifier. I attribute this to CLIP, which was released after the paper, rather than to my method: CLIP's large-scale image–text pretraining already provides much of the cross-modal alignment that VisualBERT gets from multimodal pretraining on the much smaller COCO dataset plus end-to-end fine-tuning.
 
+*Table 3: AUROC (×100) compared with Kiela et al. (2020, NeurIPS version, Table 1). Paper test values are mean ± std over three seeds; paper dev values have no std. Ours are mean ± std over three seeds.*
+
+| model | paper dev | ours dev | paper test | ours test |
+|---|---|---|---|---|
+| Image-only, grid features (paper: ResNet-152; ours: ResNet-18) | 52.33 | **53.7** | 53.71 ± 2.04 | **54.4 ± 0.5** |
+| Image-only, region features (paper: Faster R-CNN) | 57.24 | — | 57.74 ± 0.73 | — |
+| Text BERT | 65.05 | 62.7 | 69.00 ± 0.11 | 67.6 ± 0.9 |
+| Late fusion | 65.07 | 62.7 | 69.30 ± 0.33 | 67.6 ± 1.0 |
+| Concat BERT / our early fusion | 65.88 | **66.4** | 67.77 ± 0.87 | **70.1 ± 0.5** |
+| Best paper model (Visual BERT COCO) | 74.14 | — | 75.44 ± 1.86 | — |
+| CLIP early fusion (our 510 design change) | — | **74.9** | — | **77.4 ± 0.9** |
+
+Bold marks where our model scored above the corresponding paper model. Our image-only model beat the paper's comparable ResNet grid-feature baseline on both splits (but not its stronger region-feature model), our early fusion beat Concat BERT on both splits, and CLIP early fusion beat the paper's best model on both splits. Our text-only and late-fusion models were slightly below the paper's.
+
 **Comparison with the dumb baseline and with humans.** Every model except image-only ResNet clearly beats always predicting "not hateful" (0.510 test accuracy, 0 F1). My best model reaches 0.681 test accuracy, slightly above my own 65% on 20 dev memes, but my human baseline is far too small (20 memes, only 30% hateful) for a firm comparison. The paper's trained annotators reached 84.7% accuracy on the test set, well above every model here. My own errors were also telling: I failed on memes that needed both modalities (4 of 9 correct) and on memes that relied on cultural context I lacked, and these are exactly the cases where frozen encoders, which have no knowledge of memes or hate speech, are likely to fail too.
 
 **What the frozen encoders tell us.** Neither BERT nor ResNet was ever trained on memes or hate speech, yet a small classifier on BERT's [CLS] vector reaches 0.68 AUROC. This shows that general language features already encode much of what makes text offensive. ResNet's ImageNet features, by contrast, carry almost no usable signal for this task: image-only dev AUROC even fell below 0.5 as training continued. Hyperparameters barely mattered: all 96 text configurations fell within 0.620–0.635 dev AUROC. The encoder, not the classifier, set the ceiling, which is why changing the encoder to CLIP was the change that mattered.
