@@ -97,6 +97,43 @@ The CLIP design change is the clearest result: frozen CLIP features with a small
 
 ## ARI 510: Hypothesis and Design Change
 
+### Hypothesis (written before Part 3)
+
+I wrote this hypothesis after Part 0 and the text-only model, before training any image-only or fusion model, and committed it to the repository at that point (`notes/hypothesis_510.md`).
+
+*Evidence.* In the dev set, 78 of the 79 groups of memes that share identical text contain both a hateful and a non-hateful example. Text alone cannot separate them: any text-only model must get at least one meme wrong in each of those groups, which puts a hard ceiling on text-only performance. My own labeling points the same way: 9 of my 20 dev memes (45%) needed both the image and the text to judge, and I got only 4 of those 9 right.
+
+1. **Single modality:** I expect text to be more useful on its own than images. When labeling, I found the text much easier to judge as hateful or not; images were often needed to confirm the meaning, but on their own they rarely decided it.
+2. **Fusion:** I expect fusion to beat the best single-modality model, but only modestly, by roughly 2–5 AUROC points. The hateful meaning often lies in the combination of text and image, but BERT and ResNet were never trained on memes, and a small classifier on their frozen vectors can only learn simple interactions between them.
+3. **Early vs. late fusion:** I expect early fusion to work better. It sees the text and image features together in one model, so it can in principle learn how they interact. Late fusion trains the two classifiers separately and only averages their verdicts, so each one still judges from a single modality and neither can catch a meme whose hatefulness exists only in the combination.
+
+### Design change: CLIP encoders for both modalities
+
+**Change.** I replaced BERT (text) and ResNet-18 (images) with CLIP ViT-B/32 (OpenAI weights), for both modalities, giving a 512-d text vector and a 512-d image vector per meme.
+
+**Justification.** CLIP was trained on 400 million image–text pairs from the web, so its image and text vectors live in one shared space, and it has seen web images that contain text, like memes. ResNet-18 was trained only to recognize ImageNet object categories, and BERT only on books and Wikipedia. After the text-only and image-only results, the image encoder looked like the weakest link (ResNet image-only was barely above chance), and a fusion model can only combine what its encoders capture. So rather than changing how the two vectors are combined, I changed what the vectors contain, and kept everything else fixed so that any difference comes from the encoder.
+
+**Setup.** Everything except the encoder is identical to the baseline: the same training function, the same 96-configuration grid, selection and early stopping by dev AUROC, and three seeds. I trained four CLIP models that mirror the baseline ones: text-only (`clip_text`), image-only (`clip_image`), early fusion on the concatenated 1,024-d vector (`clip_early_concat`, the design change), and late fusion averaging the seed-paired text and image probabilities (`clip_late_avg`). The chosen early-fusion configuration was hidden size 256, learning rate 1e-3, no dropout, weight decay 1e-4 and pos_weight ≈ 1.82 (best epochs 62, 27 and 90 for the three seeds).
+
+### Results of the design change
+
+AUROC, mean ± std over 3 seeds (all metrics are in Tables 1 and 2):
+
+| model | BERT + ResNet, dev | CLIP, dev | BERT + ResNet, test | CLIP, test |
+|---|---|---|---|---|
+| text-only | 0.627 ± 0.007 | 0.645 ± 0.005 | 0.676 ± 0.009 | 0.682 ± 0.002 |
+| image-only | 0.537 ± 0.006 | 0.679 ± 0.003 | 0.544 ± 0.005 | 0.673 ± 0.005 |
+| early fusion | 0.664 ± 0.009 | **0.749 ± 0.005** | 0.701 ± 0.005 | **0.774 ± 0.009** |
+| late fusion | 0.627 ± 0.011 | 0.695 ± 0.005 | 0.676 ± 0.010 | 0.711 ± 0.004 |
+
+On dev, CLIP early fusion improved on the baseline early fusion by 0.085 AUROC (0.749 vs. 0.664), about ten times the larger seed std (0.009), and it was the best model on dev. It was then evaluated once on test, where it remained the best model: 0.774 vs. 0.701 for the baseline early fusion (+0.073), with the highest accuracy (0.681) and F1 (0.622) of all models as well. CLIP also improved late fusion (+0.068 on dev, +0.035 on test), but much less than early fusion.
+
+### Hypothesis revisited
+
+1. **Text more useful than images: held only for BERT/ResNet.** With the baseline encoders text clearly won (test 0.676 vs. 0.544). With CLIP the image model caught up: it beat CLIP text on dev (0.679 vs. 0.645) and was roughly level on test (0.673 vs. 0.682). My prediction was really about ResNet, not about images (see Section 4).
+2. **Fusion helps by 2–5 points: held for BERT/ResNet early fusion, exceeded with CLIP.** Baseline early fusion beat the best single model by 3.7 points on dev and 2.5 on test, inside my range. With CLIP the gain was larger than I expected: 7.0 points on dev and 9.2 on test. Late fusion did not reach my range with BERT/ResNet (no gain on either split), because averaging in a near-chance image model adds nothing.
+3. **Early fusion beats late fusion: held for both encoder pairs, on dev and on test** (BERT/ResNet: 0.664 vs. 0.627 dev, 0.701 vs. 0.676 test; CLIP: 0.749 vs. 0.695 dev, 0.774 vs. 0.711 test). This supports my reasoning that a classifier seeing both feature vectors together can learn how text and image combine, which averaging two separate verdicts cannot, though, as meme 57208 shows, this can also produce a hateful reading that isn't there.
+
 ## 5. Reflection
 
 ## 6. Generative AI Use Statement
