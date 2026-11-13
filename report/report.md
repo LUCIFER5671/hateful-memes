@@ -2,7 +2,8 @@
 
 Roshkrishna Ranjith  
 ARI 510  
-UMID: 14584881
+UMID: 14584881  
+Code: [github.com/LUCIFER5671/hateful-memes](https://github.com/LUCIFER5671/hateful-memes)
 
 ## 1. Looking at the Data
 
