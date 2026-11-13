@@ -1,5 +1,9 @@
 # ARI 510 Lab 3: Multimodal Classification with Pretrained Encoders
 
+Roshkrishna Ranjith  
+ARI 510  
+UMID: 14584881
+
 ## 1. Looking at the Data
 
 **Label distribution.** The training set has 8,500 memes, of which 35.5% are hateful. The dev (dev_seen) and test (test_seen) sets are much more balanced, at 49.4% of 500 and 49.0% of 1,000 respectively (Figure 1). This shift matters: a model trained on the training set learns that most memes are not hateful, so at a 0.5 threshold it will lean toward predicting "not hateful" on dev and test, which lowers recall. It also means accuracy alone is misleading, and I rely on AUROC as the primary metric because it does not depend on the threshold or the class balance.
