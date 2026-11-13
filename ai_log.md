@@ -236,4 +236,4 @@ Tool: Claude Code (Claude Opus 5.5, agentic coding assistant in VS Code). One en
 
 - Test AUROC differs from dev AUROC by more than 0.03 for: text_bert (+0.049), early_concat (+0.037), late_avg (+0.049), clip_text (+0.037).
 
-**How I checked it:** _(to fill in)_
+**How I checked it:** Confirmed the pre-test-eval tag was created before the test run, so every configuration was frozen first. Re-ran evaluate_test.py and checked that it refused to run a second time. Checked test_results.csv against the notebook table (9 models; CLIP early fusion 0.774 AUROC) and confirmed the four models whose test AUROC is more than 0.03 above dev. Noticed that seeds 1 and 2 had to be retrained before the test run; checked that seed 0 was bit-identical and that all dev predictions matched the saved files, so nothing was re-selected. Checked that two values that had been rounded twice in the summary were corrected in the report and AI log (early-fusion recall 0.373 and CLIP text recall std 0.014). Compared the test AUROCs with the original Hateful Memes paper's baselines (Kiela et al., 2020, NeurIPS version).
