@@ -18,6 +18,8 @@ My errors fell into two groups. Five of the seven were false alarms: I reacted t
 
 **Encoders.** All encoders were used frozen (eval mode, no gradients) and embeddings were computed once on an RTX 5060 Laptop GPU and cached to disk (~5 minutes total). Text was encoded with bert-base-uncased, keeping the [CLS] vector from the last layer (768-d, max length 128). Images were encoded with ResNet-18 (ImageNet weights) with its final classification layer replaced by an identity, giving a 512-d vector per image. For the 510 design change I also encoded both modalities with CLIP ViT-B/32 (OpenAI weights, 512-d each). CLIP's first run warned that these weights expect the QuickGELU activation, which open_clip's default configuration does not use; I forced QuickGELU and recomputed, then checked that CLIP matches each meme's image to its own text 62–65% of the time among 200 candidates (0.5% by chance). Re-embedding a sample reproduced the cached vectors to within 2.5e-5.
 
+**Why remove ResNet's final layer?** ResNet-18’s final layer maps the 512-number feature vector to scores for 1,000 ImageNet categories (dog, car, mushroom…). Those categories have nothing to do with hateful memes, so the scores would throw away most of the useful information. The 512-number vector before that layer is a general description of what’s in the image (objects, people, textures, layout), so we keep it and train our own classifier on top of it.
+
 **Classifier and training.** Every model uses the same small feedforward network (Linear → ReLU → [dropout] → Linear to one logit) trained with BCEWithLogitsLoss, Adam, and mini-batches of 64, through a single shared training function. Features are standardized using statistics from the training set only. All choices were made on the dev set; the test set was not loaded until the final comparison.
 
 **Hyperparameter selection.** For each model I searched hidden size {64, 256, 512}, learning rate {1e-3, 3e-4, 1e-4, 3e-5}, dropout {0, 0.3}, weight decay {0, 1e-4}, and pos_weight {none, n_neg/n_pos}, for up to 100 epochs, selecting by dev AUROC. The chosen configuration was retrained with 3 seeds and I report mean ± std. Chosen text-only config: hidden 64, lr 1e-3, dropout 0, weight decay 0, pos_weight ≈ 1.82 (n_neg/n_pos); best epoch 2 for all 3 seeds.
@@ -137,6 +139,26 @@ On dev, CLIP early fusion improved on the baseline early fusion by 0.085 AUROC (
 2. **Fusion helps by 2–5 points: held for BERT/ResNet early fusion, exceeded with CLIP.** Baseline early fusion beat the best single model by 3.7 points on dev and 2.5 on test, inside my range. With CLIP the gain was larger than I expected: 7.0 points on dev and 9.2 on test. Late fusion did not reach my range with BERT/ResNet (no gain on either split), because averaging in a near-chance image model adds nothing.
 3. **Early fusion beats late fusion: held for both encoder pairs, on dev and on test** (BERT/ResNet: 0.664 vs. 0.627 dev, 0.701 vs. 0.676 test; CLIP: 0.749 vs. 0.695 dev, 0.774 vs. 0.711 test). This supports my reasoning that a classifier seeing both feature vectors together can learn how text and image combine, which averaging two separate verdicts cannot, though, as meme 57208 shows, this can also produce a hateful reading that isn't there.
 
+## ARI 410: Look at the memes
+
+### 410: meme 50379
+
+**Fusion right, text-only wrong.** Label: not hateful. Text-only predicted hateful (p = 0.72); image-only (0.21), early fusion (0.0002) and late fusion (0.47) all predicted not hateful.
+
+The text mentions a dishwasher. In hateful memes, "dishwasher" is a common anti-feminist slur for women, so the text-only model most likely read it as a sexist joke and predicted hateful. The image, however, shows an actual dishwasher, so the meme is literally about the appliance and is not hateful. The image resolves the ambiguity in the text, which is why both fusion models got it right and text-only did not.
+
+### 410: meme 01967
+
+**Fusion right, text-only wrong.** Label: not hateful. Text-only predicted hateful (p = 0.64); image-only (0.31), early fusion (0.007) and late fusion (0.48) all predicted not hateful.
+
+The text (‘when you decide to stop racism by burning its symbol’) contains charged words like ‘racism’ and ‘burning’, which likely pushed the text-only model to predict hateful. The image shows a swastika being burned, so taken together the meme reads as a joke about destroying a racist symbol, not an attack on any group, and it is labeled not hateful. Both fusion models got it right, because the image supplies the context that the text alone lacks. The irony is that burning a swastika is itself a neo-Nazi rally ritual, so this meme is ambiguous even for a human.
+
+### 410: meme 57208
+
+**Early fusion wrong, both single models right.** Label: not hateful. Text-only (p = 0.44), image-only (0.46) and late fusion (0.45) all predicted not hateful; early fusion predicted hateful (0.77).
+
+Taken separately, neither part of this meme is hateful: the text ("I had potato for lunch") is just a sentence about food, and the image is just a face shaped like a potato. The text-only and image-only models each saw only one of these harmless parts, so both correctly predicted not hateful. Early fusion, which sees text and image together, likely read the combination as mocking the potato-shaped person, an attack on someone's appearance, and predicted hateful. The meme is a light joke about the picture rather than an attack on anyone, so early fusion was wrong here: combining the modalities created a hateful reading that neither modality supports on its own.
+
 ## 5. Reflection
 
 **1. Early stopping on dev loss didn't work.** At first I followed the lab's advice and stopped training at the lowest dev loss. When I looked at the curves for all three seeds, the stop always landed at epoch 1 or 2. Over the same stretch, dev AUROC kept climbing from about 0.50 to 0.62 while dev loss got worse. Across the full sweep, the untrained model had the lowest dev loss in 68 of 96 configurations. So the criterion was mostly choosing models that had learned nothing. I think two things were behind this. The model overfit within the first couple of epochs, and its probabilities were miscalibrated: the training set is 35.5% hateful but the dev set is 49.4%. That let the ranking of examples improve while cross-entropy loss went up. I tried lowering the learning rate, down to 3e-5, but that only pushed the AUROC peak out to around epoch 19 without raising it. In the end I switched to early stopping on dev AUROC, the metric the paper reports. I would make the same call again, because loss was measuring calibration rather than the ranking quality I actually cared about. Next time, though, I'd also fix the calibration directly by recalibrating on dev, for example tuning the decision threshold or rescaling the probabilities, instead of just changing the stopping metric.
@@ -153,3 +175,27 @@ On dev, CLIP early fusion improved on the baseline early fusion by 0.085 AUROC (
 | Coding and debugging | Yes | Creation. Claude Code (agentic, in VS Code) wrote all the code from my 7 step prompts: dataset download and verification, Part 0 plots and the blind-labeling sheet, cached BERT/ResNet/CLIP embeddings, the shared training function, the grid searches, the fusion models, the 410 disagreement analysis, and the single locked test evaluation. Advice: it flagged problems along the way (the CLIP QuickGELU mismatch, the pos_weight rounded in the CSV, seed models that weren’t saved). | Verified the split sizes and hateful % against the dataset, all 10,000 images present, the starting loss ≈ 0.69, the 20-example overfit at 100%, and that the test split was never loaded during training (git grep). From the per-seed curves, I found that early stopping on dev loss always picked epoch 1–2 while AUROC kept improving, and had it switch to stopping on AUROC. Checked that the pre-test tag came before the test run and that the evaluation script refused a second run.|
 | Analysis & interpretation | Yes | Information + Advice. Asked Claude why ResNet’s final layer is removed, why dev loss rose while AUROC improved, how my results compare with Kiela et al. (2020) (V3).| Formed the hypothesis myself and committed it before Part 3. Labeled the 20 memes blind myself, and the 410 meme descriptions are my own. Claude’s paper numbers came from secondary sources and didn’t match v3 of the paper, so I had Claude Code read v3 Table 1 and used those numbers instead. |
 | Report writing, formatting, editing | Yes | Advice / feedback. Gave Claude my own rough notes and had it polish the wording of the Part 0 notes, the hypothesis check, and drafts of the Data, Approach and Discussion sections. | Checked every number against the notebook and the results CSVs. Corrected Claude’s claims where they were wrong (e.g. the “text 2.5 points ahead” paper comparison). Rewrote the drafts in my own words(edited it). The Reflection is entirely my own writing. Claude only fact-checked my notes for it and did not write any of it. |
+
+## Appendix: Training curves for every model
+
+The text-only model's curves are Figure 2. Late fusion has no training, so it has no curves.
+
+![Figure A1: Image-only (ResNet-18) model.](../figures/curves_image_resnet.png)
+
+*Figure A1: Image-only (ResNet-18) model, chosen configuration, seed 0. (a) Train and dev loss per epoch (epoch 0 = untrained). (b) Dev AUROC per epoch. The dashed line marks best_epoch (highest dev AUROC).*
+
+![Figure A2: Early fusion (BERT + ResNet-18 concatenation) model.](../figures/curves_early_concat.png)
+
+*Figure A2: Early fusion (BERT + ResNet-18 concatenation) model, chosen configuration, seed 0. (a) Train and dev loss per epoch (epoch 0 = untrained). (b) Dev AUROC per epoch. The dashed line marks best_epoch (highest dev AUROC).*
+
+![Figure A3: CLIP text-only model.](../figures/curves_clip_text.png)
+
+*Figure A3: CLIP text-only model, chosen configuration, seed 0. (a) Train and dev loss per epoch (epoch 0 = untrained). (b) Dev AUROC per epoch. The dashed line marks best_epoch (highest dev AUROC).*
+
+![Figure A4: CLIP image-only model.](../figures/curves_clip_image.png)
+
+*Figure A4: CLIP image-only model, chosen configuration, seed 0. (a) Train and dev loss per epoch (epoch 0 = untrained). (b) Dev AUROC per epoch. The dashed line marks best_epoch (highest dev AUROC).*
+
+![Figure A5: CLIP early fusion (CLIP text + image concatenation) model, the 510 design change.](../figures/curves_clip_early_concat.png)
+
+*Figure A5: CLIP early fusion (CLIP text + image concatenation) model, the 510 design change, chosen configuration, seed 0. (a) Train and dev loss per epoch (epoch 0 = untrained). (b) Dev AUROC per epoch. The dashed line marks best_epoch (highest dev AUROC).*
